@@ -1,0 +1,29 @@
+# Dependencies and build output
+node_modules/
+.next/
+out/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Environment files and secrets
+.env
+.env.*
+!.env.example
+
+# Vercel and local tooling
+.vercel/
+
+# Logs and debug output
+*.log
+logs/
+
+# Local operating-system files
+.DS_Store
+Thumbs.db
+
+# Generated assets and recordings
+recordings/
+*.webm
+*.wav
+*.mp3
