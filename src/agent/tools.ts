@@ -121,38 +121,18 @@ export class RelativeSchedulingError extends Error {
   }
 }
 
-function isCalendarEventReference(value: unknown): value is CalendarEventReference {
-  return Boolean(
-    value
-    && typeof value === "object"
-    && "id" in value
-    && "title" in value
-    && "start" in value
-    && "end" in value
-    && typeof value.id === "string"
-    && typeof value.title === "string"
-    && typeof value.start === "string"
-    && typeof value.end === "string",
-  );
-}
-
-async function resolveRelativeEvent(userId: string, conversationId: string, eventId: string) {
-  const db = getDb();
-  const conversation = await db.query.conversations.findFirst({
-    columns: { schedulingDraft: true },
-    where: (conversation, { eq }) => eq(conversation.id, conversationId),
-  });
-  const draft = conversation?.schedulingDraft;
-  const eventReferences = draft && typeof draft === "object" && "eventReferences" in draft && Array.isArray(draft.eventReferences)
-    ? draft.eventReferences
-    : [];
-  if (!eventReferences.some((event) => isCalendarEventReference(event) && event.id === eventId)) {
-    throw new RelativeSchedulingError("That event was not returned by the current conversation search.");
+async function resolveRelativeEvent(userId: string, eventId: string) {
+  try {
+    // The webhook is already tied to one authenticated Callie user. Looking
+    // up the anchor in that user's selected Calendar supports events created
+    // by colleagues or other apps without exposing another user's data.
+    const event = await getCalendarEventForUser(userId, eventId);
+    if (!event.start || !event.end) throw new RelativeSchedulingError("That event does not have a usable scheduled time.");
+    return event;
+  } catch (error) {
+    if (error instanceof RelativeSchedulingError) throw error;
+    throw new RelativeSchedulingError("That Calendar event could not be found. Ask which event the user means.");
   }
-
-  const event = await getCalendarEventForUser(userId, eventId);
-  if (!event.start || !event.end) throw new RelativeSchedulingError("That event does not have a usable scheduled time.");
-  return event;
 }
 
 function getRelativeDateAndTime(event: CalendarEventReference, position: "before" | "after", timezone: string) {
@@ -171,7 +151,7 @@ function getRelativeDateAndTime(event: CalendarEventReference, position: "before
 export async function findSlotsForConversation(userId: string, conversationId: string, input: z.infer<typeof findSlotsToolSchema>) {
   const timezone = await getUserTimezone(userId);
   const relativeEvent = input.anchorEventId && input.relativePosition
-    ? await resolveRelativeEvent(userId, conversationId, input.anchorEventId)
+    ? await resolveRelativeEvent(userId, input.anchorEventId)
     : null;
   const relativeAnchor = relativeEvent && input.relativePosition
     ? getRelativeDateAndTime(relativeEvent, input.relativePosition, timezone)
@@ -240,14 +220,11 @@ export const findEventToolSchema = agentDateRangeFields
   })
   .refine(hasValidDateRange, "The start date must not be after the end date.");
 
-export async function findEventsForConversation(userId: string, conversationId: string, input: z.infer<typeof findEventToolSchema>) {
+export async function findEventsForConversation(userId: string, input: z.infer<typeof findEventToolSchema>) {
   const timezone = await getUserTimezone(userId);
   const boundaries = getSearchBoundaries({ timezone, dateRange: { startDate: input.startDate, endDate: input.endDate } });
   const query = getCalendarEventQuery(input.query);
   const events = await searchCalendarEvents(userId, query, boundaries.start, boundaries.end);
-  await markConversationStatus(conversationId, "collecting", {
-    eventReferences: events.filter((event) => event.id && event.start && event.end).slice(0, 100),
-  });
   return {
     events,
     resultType: query ? "matching_events" : "agenda",

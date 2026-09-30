@@ -8,7 +8,7 @@ export async function POST(request: Request) {
   const parsed = findEventToolSchema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: "Invalid event-search request", details: parsed.error.flatten() }, { status: 400 });
   try {
-    return NextResponse.json(await findEventsForConversation(context.conversation.userId, context.conversation.id, parsed.data));
+    return NextResponse.json(await findEventsForConversation(context.conversation.userId, parsed.data));
   } catch (error) {
     console.error("agent.find_events_failed", error);
     return NextResponse.json({ error: "Calendar events could not be searched." }, { status: 502 });

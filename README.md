@@ -120,7 +120,7 @@ Add these optional String LLM Prompt properties:
 ```text
 exactStart: Use only when the user asks for a precise start time, such as “at 9 AM”. Send HH:MM in 24-hour time, such as 09:00. Do not send preferredStart or preferredEnd with exactStart.
 
-anchorEventId: Use only after search_calendar_events returned the named event the user means. Copy its exact id without speaking it. Omit startDate and endDate when this is supplied.
+anchorEventId: Normally obtain this from search_calendar_events for the named event the user means. Copy its exact id without speaking it. Callie validates the event against the connected user's Calendar. Omit startDate and endDate when this is supplied.
 
 relativePosition: Use only with anchorEventId. Send exactly before when the user asks to meet before that event, or after when they ask to meet after it.
 ```
