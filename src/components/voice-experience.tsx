@@ -69,11 +69,18 @@ function VoiceExperienceContent({ user }: { user?: CurrentUser | null }) {
   const replySamples = useRef<number[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(calendarPreviewDate);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [isPreparingVoice, setIsPreparingVoice] = useState(false);
   const [voiceLevel, setVoiceLevel] = useState(0.16);
   const [averageReplyStartMs, setAverageReplyStartMs] = useState<number | null>(null);
   const [messages, setMessages] = useState<TranscriptMessage[]>(initialTranscript);
   const conversation = useConversation({
-    onError: (message) => setVoiceError(message),
+    onError: (message) => {
+      setVoiceError(message);
+      setIsPreparingVoice(false);
+    },
+    onStatusChange: ({ status }) => {
+      if (status === "connecting" || status === "connected") setIsPreparingVoice(false);
+    },
     onMessage: (message) => {
       if (message.role === "user") replyStartedAt.current = performance.now();
 
@@ -105,7 +112,9 @@ function VoiceExperienceContent({ user }: { user?: CurrentUser | null }) {
   const isConnected = conversation.status === "connected";
   const isListening = isConnected && conversation.isListening;
   const isSpeaking = isConnected && conversation.isSpeaking;
-  const statusLabel = conversation.status === "connecting"
+  const statusLabel = isPreparingVoice
+    ? "Preparing a secure voice session"
+    : conversation.status === "connecting"
     ? "Connecting"
     : isSpeaking
       ? "Callie is speaking"
@@ -181,12 +190,15 @@ function VoiceExperienceContent({ user }: { user?: CurrentUser | null }) {
       return;
     }
 
+    if (isPreparingVoice) return;
+
     if (conversation.status === "connected" || conversation.status === "connecting") {
       conversation.endSession();
       return;
     }
 
     try {
+      setIsPreparingVoice(true);
       setVoiceError(null);
       replyStartedAt.current = null;
       replySamples.current = [];
@@ -210,6 +222,7 @@ function VoiceExperienceContent({ user }: { user?: CurrentUser | null }) {
       });
     } catch (error) {
       setVoiceError(error instanceof Error ? error.message : "Microphone access is required to start Callie.");
+      setIsPreparingVoice(false);
     }
   }
 
@@ -323,14 +336,16 @@ function VoiceExperienceContent({ user }: { user?: CurrentUser | null }) {
               <span className="strands-center" />
             </div>
             <button
-              className={`voice-action ${isListening ? "is-listening" : ""}`}
+              className={`voice-action ${isListening ? "is-listening" : ""} ${isPreparingVoice ? "is-preparing" : ""}`}
               type="button"
               onClick={() => void toggleListening()}
               aria-label={user ? isConnected ? "End voice conversation" : "Start voice conversation" : "Connect Google Calendar to start talking"}
               aria-pressed={isListening}
+              aria-busy={isPreparingVoice}
+              disabled={isPreparingVoice}
             >
-              <span className="mic-disc"><Mic size={19} /></span>
-              <span>{conversation.status === "connecting" ? "Connecting" : isConnected ? "End conversation" : "Start talking"}</span>
+              <span className="mic-disc">{isPreparingVoice ? <span className="button-spinner" /> : <Mic size={19} />}</span>
+              <span>{isPreparingVoice ? "Preparing Callie" : conversation.status === "connecting" ? "Connecting" : isConnected ? "End conversation" : "Start talking"}</span>
               <kbd>Space</kbd>
             </button>
             {voiceError && <p className="voice-error" role="alert">{voiceError}</p>}
