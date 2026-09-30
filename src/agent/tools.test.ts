@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bookEventToolSchema, findEventToolSchema, findSlotsToolSchema, getOfferedSlot, usualMeetingToolSchema } from "./tools";
+import { bookEventToolSchema, findEventToolSchema, findSlotsToolSchema, getOfferedSlot, isSpecificEventReference, usualMeetingToolSchema } from "./tools";
 
 describe("findSlotsToolSchema", () => {
   it("accepts a flat time-window request without asking the agent for timezone", () => {
@@ -56,6 +56,14 @@ describe("findEventToolSchema", () => {
       startDate: "2026-10-02",
       endDate: "2026-10-02",
     });
+  });
+
+  it("rejects generic agenda requests that Calendar text search cannot answer", () => {
+    for (const query of ["events", "my meetings", "calendar", "availability"]) {
+      expect(findEventToolSchema.safeParse({ query, startDate: "2026-10-02", endDate: "2026-10-02" }).success).toBe(false);
+      expect(isSpecificEventReference(query)).toBe(false);
+    }
+    expect(isSpecificEventReference("design review")).toBe(true);
   });
 });
 

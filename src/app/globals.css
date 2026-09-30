@@ -190,7 +190,6 @@ a { color: inherit; }
 .transcript-header { display: flex; align-items: flex-start; justify-content: space-between; }
 .transcript-header h2 { font-size: 30px; }
 .transcript-metrics { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
-.reply-start { padding: 6px 9px; border: 1px solid #d5dcfa; border-radius: 999px; background: #f5f7ff; color: var(--blue); font-size: 11px; font-weight: 700; white-space: nowrap; }
 .session-pill { display: inline-flex; align-items: center; gap: 7px; padding: 6px 9px; border: 1px solid var(--hairline); border-radius: 999px; color: #7d819e; font-size: 11px; font-weight: 700; }
 .session-pill i { width: 6px; height: 6px; background: #a4a7b8; box-shadow: none; }
 .session-pill.is-live { border-color: rgba(74, 191, 124, 0.28); background: rgba(74, 191, 124, 0.08); color: #277a48; }
@@ -223,14 +222,6 @@ a { color: inherit; }
 .bento-card p:not(.card-kicker) { position: relative; z-index: 1; max-width: 370px; margin: 12px 0 0; color: var(--ink-muted); font-size: 13px; line-height: 1.65; }
 .intent-card code { position: relative; z-index: 1; margin-top: 22px; color: var(--blue); font-family: var(--font-sora), sans-serif; font-size: 12px; font-weight: 600; }
 .availability-card { min-height: 222px; justify-content: flex-end; }
-.availability-orbit { position: absolute; top: 21px; right: 35px; width: 128px; height: 128px; border: 1px solid rgba(0, 61, 255, 0.14); border-radius: 50%; }
-.availability-orbit::before, .availability-orbit::after { position: absolute; border: 1px solid rgba(183, 90, 255, 0.16); border-radius: 50%; content: ""; }
-.availability-orbit::before { inset: 20px; }
-.availability-orbit::after { inset: 42px; }
-.availability-orbit span, .availability-orbit i, .availability-orbit b { position: absolute; border-radius: 50%; background: var(--blue); box-shadow: 0 0 0 5px rgba(0, 61, 255, 0.08); animation: orbitDot 5s linear infinite; }
-.availability-orbit span { top: -3px; left: 55px; width: 7px; height: 7px; }
-.availability-orbit i { right: 18px; bottom: 11px; width: 8px; height: 8px; background: var(--violet); animation-delay: -2s; }
-.availability-orbit b { top: 57px; left: 57px; width: 13px; height: 13px; background: #39bb77; }
 .confirm-card { min-height: 222px; justify-content: flex-end; }
 .confirmation-flow { position: absolute; top: 39px; left: 30px; display: flex; align-items: center; gap: 14px; color: var(--blue); }
 .confirmation-flow > span { padding: 8px 11px; border: 1px solid #c8d3ff; border-radius: 8px; background: #f6f8ff; color: var(--ink-soft); font-size: 10px; font-weight: 700; }
@@ -256,7 +247,6 @@ footer a:hover { color: var(--blue); }
 .legal-card li + li { margin-top: 5px; }
 
 @keyframes quoteWave { 50% { transform: scaleY(0.6); opacity: 0.55; } }
-@keyframes orbitDot { to { transform: rotate(360deg); transform-origin: 64px 64px; } }
 @keyframes gradientWaveDrift {
   from { transform: translate3d(-1.5%, -0.5%, 0) scale(1); }
   to { transform: translate3d(1.5%, 0.8%, 0) scale(1.025); }

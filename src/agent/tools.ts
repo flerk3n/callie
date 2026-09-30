@@ -18,6 +18,42 @@ function hasValidDateRange({ startDate, endDate }: { startDate: string; endDate:
   return startDate <= endDate;
 }
 
+const genericEventReferences = new Set([
+  "agenda",
+  "appointment",
+  "appointments",
+  "availability",
+  "calendar",
+  "event",
+  "events",
+  "meeting",
+  "meetings",
+  "my agenda",
+  "my calendar",
+  "my events",
+  "my meetings",
+  "my schedule",
+  "plans",
+  "schedule",
+]);
+
+function normalizeEventReference(query: string) {
+  return query
+    .toLocaleLowerCase("en-US")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Google Calendar's `q` parameter is a text-match filter, not an agenda
+ * lookup. Reject generic requests so an empty text match can never be
+ * mistaken for an empty Calendar.
+ */
+export function isSpecificEventReference(query: string) {
+  return !genericEventReferences.has(normalizeEventReference(query));
+}
+
 function addMinutesToLocalTime(time: string, durationMinutes: number) {
   const [hours, minutes] = time.split(":").map(Number);
   const totalMinutes = hours * 60 + minutes + durationMinutes;
@@ -72,7 +108,14 @@ export async function findSlotsForConversation(userId: string, conversationId: s
 }
 
 export const findEventToolSchema = agentDateRangeFields
-  .extend({ query: z.string().trim().min(1).max(200) })
+  .extend({
+    query: z
+      .string()
+      .trim()
+      .min(1)
+      .max(200)
+      .refine(isSpecificEventReference, "Use a specific event name, not a generic calendar or availability request."),
+  })
   .refine(hasValidDateRange, "The start date must not be after the end date.");
 
 export async function findEventsForConversation(userId: string, input: z.infer<typeof findEventToolSchema>) {

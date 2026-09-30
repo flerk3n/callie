@@ -65,13 +65,10 @@ export function VoiceExperience({ user }: { user?: CurrentUser | null }) {
 
 function VoiceExperienceContent({ user }: { user?: CurrentUser | null }) {
   const scope = useRef<HTMLElement>(null);
-  const replyStartedAt = useRef<number | null>(null);
-  const replySamples = useRef<number[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(calendarPreviewDate);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [isPreparingVoice, setIsPreparingVoice] = useState(false);
   const [voiceLevel, setVoiceLevel] = useState(0.16);
-  const [averageReplyStartMs, setAverageReplyStartMs] = useState<number | null>(null);
   const [messages, setMessages] = useState<TranscriptMessage[]>(initialTranscript);
   const conversation = useConversation({
     onError: (message) => {
@@ -82,8 +79,6 @@ function VoiceExperienceContent({ user }: { user?: CurrentUser | null }) {
       if (status === "connecting" || status === "connected") setIsPreparingVoice(false);
     },
     onMessage: (message) => {
-      if (message.role === "user") replyStartedAt.current = performance.now();
-
       setMessages((current) => {
         const nextMessage = {
           id: `${message.event_id}-${message.role}`,
@@ -93,19 +88,6 @@ function VoiceExperienceContent({ user }: { user?: CurrentUser | null }) {
         const withoutDuplicate = current.filter((item) => item.id !== nextMessage.id);
         return [...withoutDuplicate, nextMessage].slice(-6);
       });
-    },
-    onModeChange: ({ mode }) => {
-      if (mode !== "speaking" || replyStartedAt.current === null) return;
-
-      const sample = performance.now() - replyStartedAt.current;
-      replyStartedAt.current = null;
-      if (sample < 0 || sample > 60_000) return;
-
-      replySamples.current = [...replySamples.current, sample].slice(-12);
-      if (replySamples.current.length < 2) return;
-
-      const total = replySamples.current.reduce((sum, value) => sum + value, 0);
-      setAverageReplyStartMs(total / replySamples.current.length);
     },
   });
 
@@ -200,9 +182,6 @@ function VoiceExperienceContent({ user }: { user?: CurrentUser | null }) {
     try {
       setIsPreparingVoice(true);
       setVoiceError(null);
-      replyStartedAt.current = null;
-      replySamples.current = [];
-      setAverageReplyStartMs(null);
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getTracks().forEach((track) => track.stop());
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -229,11 +208,6 @@ function VoiceExperienceContent({ user }: { user?: CurrentUser | null }) {
   const displayName = user?.name?.split(" ")[0] || user?.email?.split("@")[0] || "You";
   const initials = displayName.slice(0, 1).toUpperCase();
   const strandsIntensity = isConnected ? Math.min(1.12, 0.28 + voiceLevel) : 0.24;
-  const averageReplyStart = averageReplyStartMs === null
-    ? null
-    : averageReplyStartMs < 1_000
-      ? `${Math.round(averageReplyStartMs)} ms`
-      : `${(averageReplyStartMs / 1_000).toFixed(1)}s`;
 
   return (
     <main className="site-shell" ref={scope}>
@@ -358,7 +332,6 @@ function VoiceExperienceContent({ user }: { user?: CurrentUser | null }) {
                 <h2 id="transcript-title">Transcript</h2>
               </div>
               <div className="transcript-metrics">
-                {averageReplyStart && <span className="reply-start">Avg reply {averageReplyStart}</span>}
                 <span className={`session-pill ${isConnected ? "is-live" : ""}`}>
                   <i /> {isConnected ? "Live" : "Standby"}
                 </span>
@@ -405,7 +378,6 @@ function VoiceExperienceContent({ user }: { user?: CurrentUser | null }) {
 
           <article className="bento-card availability-card reveal">
             <span className="bento-number">02</span>
-            <div className="availability-orbit" aria-hidden="true"><span /><i /><b /></div>
             <div>
               <p className="card-kicker">Fresh availability</p>
               <h3>Check what is actually open</h3>
