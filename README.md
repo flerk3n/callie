@@ -97,6 +97,31 @@ x-callie-webhook-secret: Secret value matching ELEVENLABS_WEBHOOK_SECRET
 x-eleven-conversation-id: Dynamic Variable system__conversation_id
 ```
 
+### Session date variables
+
+At the start of every voice session, Callie sends these dynamic variables from the browser. Do not create static workspace values for them in ElevenLabs.
+
+```text
+{{callie_local_date}}  # Exact local date in YYYY-MM-DD, for example 2026-10-01
+{{callie_local_time}}  # Human-readable local date and time
+{{callie_timezone}}    # IANA timezone, for example Asia/Kolkata
+```
+
+Put this at the very top of the ElevenLabs system prompt:
+
+```text
+Current local date: {{callie_local_date}}
+Current local time: {{callie_local_time}}
+User timezone: {{callie_timezone}}
+
+Date handling is strict:
+- Resolve “today”, “tomorrow”, weekdays, and other relative dates only from the current local date above.
+- Before calling any Calendar tool, convert the requested date to an exact YYYY-MM-DD value.
+- Never reuse a date from an earlier tool call or assume a date from an earlier answer is still relevant.
+- If the user asks for events “tomorrow”, search exactly the calculated tomorrow date.
+- If the user asks what date it is, answer using the current local date above.
+```
+
 For `get_usual_meeting_context`, use `POST /api/agent/tools/usual-meeting` with the same headers and one required String LLM Prompt property:
 
 ```text

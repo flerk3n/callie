@@ -22,6 +22,7 @@ import { Bubble, BubbleContent, BubbleGroup } from "@/components/ui/bubble";
 import { Calendar } from "@/components/ui/calendar";
 import { GradientWave } from "@/components/ui/gradient-wave";
 import { enUS } from "date-fns/locale";
+import { getLocalDateContext } from "@/lib/local-date-context";
 import { toVisibleTranscriptText } from "@/lib/transcript";
 
 type CurrentUser = {
@@ -201,6 +202,7 @@ function VoiceExperienceContent({ user }: { user?: CurrentUser | null }) {
       stream.getTracks().forEach((track) => track.stop());
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       if (!timezone) throw new Error("Your browser could not determine a timezone.");
+      const localDateContext = getLocalDateContext(timezone);
       const response = await fetch("/api/voice/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -213,6 +215,11 @@ function VoiceExperienceContent({ user }: { user?: CurrentUser | null }) {
       conversation.startSession({
         conversationToken: payload.conversationToken,
         connectionType: "webrtc",
+        dynamicVariables: {
+          callie_local_date: localDateContext.date,
+          callie_local_time: localDateContext.time,
+          callie_timezone: localDateContext.timezone,
+        },
       });
     } catch (error) {
       setVoiceError(error instanceof Error ? error.message : "Microphone access is required to start Callie.");
