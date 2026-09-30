@@ -12,7 +12,11 @@ export function getDb() {
     throw new Error("DATABASE_URL must be configured before using persistent data.");
   }
 
-  const sql = global.callieSql ?? postgres(connectionString, { max: 1, prepare: false });
+  const sql = global.callieSql ?? postgres(connectionString, {
+    max: 1,
+    prepare: false,
+    ssl: "require",
+  });
   if (process.env.NODE_ENV !== "production") global.callieSql = sql;
 
   return drizzle(sql, { schema });

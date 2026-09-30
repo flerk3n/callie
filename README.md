@@ -48,11 +48,11 @@ The agent handles conversation. The backend is the source of truth for identity,
 
    Generate `CREDENTIAL_ENCRYPTION_KEY` with `openssl rand -base64 32`. It encrypts Google refresh tokens with AES-256-GCM before they enter Postgres.
 
-3. Create or use a Supabase project, copy its **Session pooler** connection string from **Connect**, and set it as `DATABASE_URL`. Keep `sslmode=require` in the URL. Then apply the Supabase migration.
+3. Create or use a Supabase project and copy its **Transaction pooler** connection string from **Connect** into `DATABASE_URL`. The server client is configured for this serverless mode (`max: 1`, prepared statements disabled, TLS required). Use the **Session pooler** string only for the CLI migration command.
 
    ```bash
    supabase link --project-ref <your-project-ref>
-   supabase db push
+   supabase db push --db-url "<session-pooler-connection-string>"
    ```
 
    The checked-in migration enables Row Level Security on every Callie table and intentionally creates no browser policies. Callie accesses scheduling data only through its server-side database connection.
@@ -122,7 +122,7 @@ The scheduler tests cover busy-event conflicts, configurable buffers, excluded w
 
 ## Deployment
 
-Deploy the Next.js application to Vercel, provision Supabase Postgres, add every environment variable in the Vercel project settings, run `supabase db push` against production, and then update:
+Deploy the Next.js application to Vercel, provision Supabase Postgres, add the Transaction pooler `DATABASE_URL` and every other environment variable in the Vercel project settings, run `supabase db push --db-url "<session-pooler-connection-string>"` against production, and then update:
 
 - Google OAuth redirect URI
 - `NEXTAUTH_URL`

@@ -6,7 +6,6 @@ import {
   pgTable,
   text,
   timestamp,
-  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -50,7 +49,6 @@ export const calendarConnections = pgTable(
     disconnectedAt: timestamp("disconnected_at", { withTimezone: true }),
   },
   (table) => [
-    uniqueIndex("calendar_connections_provider_account_unique").on(table.providerAccountId),
     index("calendar_connections_user_idx").on(table.userId),
   ],
 );
@@ -81,7 +79,10 @@ export const bookings = pgTable(
     status: bookingStatus("status").default("confirmed").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [index("bookings_user_starts_idx").on(table.userId, table.startsAt)],
+  (table) => [
+    index("bookings_user_starts_idx").on(table.userId, table.startsAt),
+    index("bookings_conversation_idx").on(table.conversationId),
+  ],
 );
 
 export const usersRelations = relations(users, ({ many }) => ({
