@@ -35,7 +35,7 @@ type TranscriptMessage = {
   text: string;
 };
 
-const calendarPreviewDate = new Date(2026, 8, 30);
+const calendarPreviewDate = new Date();
 
 function Glyph({ children }: { children: ReactNode }) {
   return <span className="glyph" aria-hidden="true">{children}</span>;
