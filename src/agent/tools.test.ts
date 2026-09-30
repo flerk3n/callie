@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bookEventToolSchema, findEventToolSchema, findSlotsToolSchema, isOfferedSlot } from "./tools";
+import { bookEventToolSchema, findEventToolSchema, findSlotsToolSchema, getOfferedSlot } from "./tools";
 
 describe("findSlotsToolSchema", () => {
   it("normalizes the flat agent payload into Callie's structured scheduler input", () => {
@@ -69,17 +69,22 @@ describe("bookEventToolSchema", () => {
   it("adds safe server defaults to the small agent payload", () => {
     expect(
       bookEventToolSchema.parse({
-        startsAt: "2026-10-02T08:30:00+05:30",
-        endsAt: "2026-10-02T09:00:00+05:30",
-        timezone: "Asia/Kolkata",
+        slotId: "slot_1",
         confirmed: true,
       }),
-    ).toMatchObject({ title: "Meeting", attendeeEmails: [], createMeetLink: true, confirmed: true });
+    ).toEqual({ title: "Meeting", slotId: "slot_1", confirmed: true });
   });
 
-  it("only recognizes an exact previously offered slot as bookable", () => {
-    const draft = { slots: [{ start: "2026-10-02T08:30:00+05:30", end: "2026-10-02T09:00:00+05:30" }] };
-    expect(isOfferedSlot(draft, "2026-10-02T08:30:00+05:30", "2026-10-02T09:00:00+05:30")).toBe(true);
-    expect(isOfferedSlot(draft, "2026-10-02T09:30:00+05:30", "2026-10-02T10:00:00+05:30")).toBe(false);
+  it("resolves only a previously offered slot by its stable identifier", () => {
+    const draft = {
+      slots: [{ id: "slot_1", start: "2026-10-02T03:00:00Z", end: "2026-10-02T03:30:00Z", timezone: "Asia/Kolkata" }],
+    };
+    expect(getOfferedSlot(draft, "slot_1")).toEqual({
+      id: "slot_1",
+      start: "2026-10-02T03:00:00Z",
+      end: "2026-10-02T03:30:00Z",
+      timezone: "Asia/Kolkata",
+    });
+    expect(getOfferedSlot(draft, "slot_2")).toBeNull();
   });
 });

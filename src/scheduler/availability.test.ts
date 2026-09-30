@@ -22,6 +22,7 @@ describe("findAvailableSlots", () => {
       "2026-10-06T14:15:00",
       "2026-10-06T14:30:00",
     ]);
+    expect(findAvailableSlots(search).map((slot) => slot.id)).toEqual(["slot_1", "slot_2"]);
   });
 
   it("applies user-requested buffers around busy events", () => {

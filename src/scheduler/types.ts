@@ -30,6 +30,8 @@ export const slotSearchSchema = z.object({
 export type SlotSearch = z.infer<typeof slotSearchSchema>;
 
 export type AvailableSlot = {
+  /** A conversation-scoped identifier the agent can safely use to book this option. */
+  id: string;
   start: string;
   end: string;
   timezone: string;

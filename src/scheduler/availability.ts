@@ -47,6 +47,7 @@ export function findAvailableSlots(input: SlotSearch): AvailableSlot[] {
 
           if (!busyIntervals.some((busy) => overlaps(start, end, busy))) {
             results.push({
+              id: `slot_${results.length + 1}`,
               start: start.toString(),
               end: end.toString(),
               timezone: search.timezone,
