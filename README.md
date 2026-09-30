@@ -139,7 +139,7 @@ Google may show an “app is not verified” warning while OAuth branding and se
 
 ### 5. Configure ElevenLabs
 
-Create a private agent, set its ID as `ELEVENLABS_AGENT_ID`, and add the four tools listed above using the deployed HTTPS base URL. Configure the two headers for every tool, and add the session date variables to the top of the agent’s system prompt. The app creates a short-lived conversation token server-side; the ElevenLabs API key never reaches the browser.
+Create a private agent, set its ID as `ELEVENLABS_AGENT_ID`, and add the four tools listed above using the deployed HTTPS base URL. Configure the two headers for every tool, and add the session date variables to the top of the agent’s system prompt. See [ELEVENLABS-CONFIG.md](ELEVENLABS-CONFIG.md) for the complete sanitized agent, prompt, and webhook configuration. The app creates a short-lived conversation token server-side; the ElevenLabs API key never reaches the browser.
 
 ### 6. Run locally
 
