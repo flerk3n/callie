@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Terms of Service — Callie",
+  title: "Terms of Service | Callie",
   description: "Terms for using Callie, the voice-first scheduling assistant.",
 };
 
