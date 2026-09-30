@@ -2,10 +2,11 @@ import { z } from "zod";
 import { Temporal } from "@js-temporal/polyfill";
 import {
   createConfirmedEvent,
+  findCalendarEventsByExactTitle,
   getBusyIntervals,
-  getCalendarEventForUser,
   inferUsualDurationFromCalendar,
   searchCalendarEvents,
+  toAgentCalendarEvent,
   type CalendarEventReference,
 } from "@/calendar/service";
 import { getDb } from "@/db";
@@ -81,21 +82,29 @@ export const findSlotsToolSchema = z
     exactStart: localTimeSchema.optional(),
     preferredStart: localTimeSchema.optional(),
     preferredEnd: localTimeSchema.optional(),
-    anchorEventId: z.string().trim().min(1).max(500).optional(),
+    anchorEventTitle: z.string().trim().min(1).max(200).optional(),
+    anchorDate: z.string().date().optional(),
+    anchorStartTime: localTimeSchema.optional(),
     relativePosition: z.enum(["before", "after"]).optional(),
   })
-  .superRefine(({ startDate, endDate, exactStart, preferredStart, preferredEnd, durationMinutes, anchorEventId, relativePosition }, context) => {
+  .superRefine(({ startDate, endDate, exactStart, preferredStart, preferredEnd, durationMinutes, anchorEventTitle, anchorDate, anchorStartTime, relativePosition }, context) => {
+    const hasRelativeAnchor = Boolean(anchorEventTitle && anchorDate && relativePosition);
+    const hasAnyRelativeAnchorField = Boolean(anchorEventTitle || anchorDate || anchorStartTime || relativePosition);
+
     if (Boolean(startDate) !== Boolean(endDate)) {
       context.addIssue({ code: "custom", path: ["startDate"], message: "Provide both startDate and endDate, or neither." });
     }
     if (startDate && endDate && startDate > endDate) {
       context.addIssue({ code: "custom", path: ["endDate"], message: "The start date must not be after the end date." });
     }
-    if (!anchorEventId && (!startDate || !endDate)) {
+    if (!hasRelativeAnchor && (!startDate || !endDate)) {
       context.addIssue({ code: "custom", path: ["startDate"], message: "Provide a date range unless scheduling relative to an event." });
     }
-    if (Boolean(anchorEventId) !== Boolean(relativePosition)) {
-      context.addIssue({ code: "custom", path: ["anchorEventId"], message: "Provide anchorEventId and relativePosition together." });
+    if (hasAnyRelativeAnchorField && !hasRelativeAnchor) {
+      context.addIssue({ code: "custom", path: ["anchorEventTitle"], message: "Provide anchorEventTitle, anchorDate, and relativePosition together." });
+    }
+    if (hasRelativeAnchor && (startDate || endDate)) {
+      context.addIssue({ code: "custom", path: ["startDate"], message: "Do not provide a date range with a relative event anchor." });
     }
     if (Boolean(preferredStart) !== Boolean(preferredEnd)) {
       context.addIssue({ code: "custom", message: "Provide both preferredStart and preferredEnd, or neither." });
@@ -106,7 +115,7 @@ export const findSlotsToolSchema = z
     if (exactStart && addMinutesToLocalTime(exactStart, durationMinutes) >= "24:00") {
       context.addIssue({ code: "custom", message: "The exact meeting time must end on the same day." });
     }
-    if (anchorEventId && exactStart) {
+    if (hasRelativeAnchor && exactStart) {
       context.addIssue({ code: "custom", path: ["exactStart"], message: "Use a relative event or an exact start, not both." });
     }
     if (preferredStart && preferredEnd && preferredStart >= preferredEnd) {
@@ -121,18 +130,36 @@ export class RelativeSchedulingError extends Error {
   }
 }
 
-async function resolveRelativeEvent(userId: string, eventId: string) {
+function hasAnchorStartTime(event: CalendarEventReference, startTime: string, timezone: string) {
   try {
-    // The webhook is already tied to one authenticated Callie user. Looking
-    // up the anchor in that user's selected Calendar supports events created
-    // by colleagues or other apps without exposing another user's data.
-    const event = await getCalendarEventForUser(userId, eventId);
-    if (!event.start || !event.end) throw new RelativeSchedulingError("That event does not have a usable scheduled time.");
-    return event;
-  } catch (error) {
-    if (error instanceof RelativeSchedulingError) throw error;
-    throw new RelativeSchedulingError("That Calendar event could not be found. Ask which event the user means.");
+    return Temporal.Instant.from(event.start).toZonedDateTimeISO(timezone).toPlainTime().toString({ smallestUnit: "minute" }) === startTime;
+  } catch {
+    return false;
   }
+}
+
+async function resolveRelativeEvent(
+  userId: string,
+  { title, date, startTime }: { title: string; date: string; startTime?: string },
+  timezone: string,
+) {
+  const boundaries = getSearchBoundaries({ timezone, dateRange: { startDate: date, endDate: date } });
+  const titleMatches = await findCalendarEventsByExactTitle(userId, title, boundaries.start, boundaries.end);
+  const matches = startTime
+    ? titleMatches.filter((event) => hasAnchorStartTime(event, startTime, timezone))
+    : titleMatches;
+
+  if (matches.length === 0) {
+    const timeReference = startTime ? ` at ${startTime}` : "";
+    throw new RelativeSchedulingError(`No Calendar event titled “${title}” was found on ${date}${timeReference}. Ask the user to clarify the event.`);
+  }
+  if (matches.length > 1) {
+    throw new RelativeSchedulingError(`More than one Calendar event titled “${title}” was found on ${date}. Ask the user for its start time, then include anchorStartTime.`);
+  }
+  if (!matches[0].start || !matches[0].end) {
+    throw new RelativeSchedulingError("That event does not have a usable scheduled time.");
+  }
+  return matches[0];
 }
 
 function getRelativeDateAndTime(event: CalendarEventReference, position: "before" | "after", timezone: string) {
@@ -150,8 +177,12 @@ function getRelativeDateAndTime(event: CalendarEventReference, position: "before
 
 export async function findSlotsForConversation(userId: string, conversationId: string, input: z.infer<typeof findSlotsToolSchema>) {
   const timezone = await getUserTimezone(userId);
-  const relativeEvent = input.anchorEventId && input.relativePosition
-    ? await resolveRelativeEvent(userId, input.anchorEventId)
+  const relativeEvent = input.anchorEventTitle && input.anchorDate && input.relativePosition
+    ? await resolveRelativeEvent(userId, {
+      title: input.anchorEventTitle,
+      date: input.anchorDate,
+      startTime: input.anchorStartTime,
+    }, timezone)
     : null;
   const relativeAnchor = relativeEvent && input.relativePosition
     ? getRelativeDateAndTime(relativeEvent, input.relativePosition, timezone)
@@ -226,7 +257,7 @@ export async function findEventsForConversation(userId: string, input: z.infer<t
   const query = getCalendarEventQuery(input.query);
   const events = await searchCalendarEvents(userId, query, boundaries.start, boundaries.end);
   return {
-    events,
+    events: events.map(toAgentCalendarEvent),
     resultType: query ? "matching_events" : "agenda",
     message: query
       ? "These are the events matching the requested reference. An empty result means no matching event was found."

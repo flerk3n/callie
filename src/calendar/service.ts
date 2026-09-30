@@ -16,6 +16,8 @@ export type CalendarEventReference = {
   end: string;
 };
 
+export type CalendarEventForAgent = Omit<CalendarEventReference, "id">;
+
 export class CalendarConflictError extends Error {
   constructor() {
     super("This time was just taken. Please choose another option.");
@@ -56,6 +58,23 @@ function toCalendarEventReference(event: {
   };
 }
 
+function normalizeEventTitle(value: string) {
+  return value
+    .toLocaleLowerCase("en-US")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function findExactTitleMatches(events: CalendarEventReference[], title: string) {
+  const normalizedTitle = normalizeEventTitle(title);
+  return events.filter((event) => normalizeEventTitle(event.title) === normalizedTitle);
+}
+
+export function toAgentCalendarEvent({ title, start, end }: CalendarEventReference): CalendarEventForAgent {
+  return { title, start, end };
+}
+
 export async function getBusyIntervals(userId: string, timeMin: string, timeMax: string): Promise<BusyInterval[]> {
   const { calendar, calendarId } = await getCalendarForUser(userId);
   const response = await calendar.freebusy.query({
@@ -80,10 +99,9 @@ export async function searchCalendarEvents(userId: string, query: string | undef
   return (response.data.items ?? []).map(toCalendarEventReference);
 }
 
-export async function getCalendarEventForUser(userId: string, eventId: string) {
-  const { calendar, calendarId } = await getCalendarForUser(userId);
-  const response = await calendar.events.get({ calendarId, eventId });
-  return toCalendarEventReference(response.data);
+export async function findCalendarEventsByExactTitle(userId: string, title: string, timeMin: string, timeMax: string) {
+  const events = await searchCalendarEvents(userId, undefined, timeMin, timeMax);
+  return findExactTitleMatches(events, title);
 }
 
 export function inferUsualDuration(events: Array<{ start?: string | null; end?: string | null }>): HistoricalDuration | null {

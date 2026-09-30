@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inferUsualDuration } from "./service";
+import { findExactTitleMatches, inferUsualDuration, toAgentCalendarEvent } from "./service";
 
 describe("inferUsualDuration", () => {
   it("uses the most frequent valid historical meeting duration", () => {
@@ -20,5 +20,24 @@ describe("inferUsualDuration", () => {
         { start: "2026-01-05T09:00:00Z", end: "2026-01-05T09:05:00Z" },
       ]),
     ).toBeNull();
+  });
+});
+
+describe("Calendar event references", () => {
+  const events = [
+    { id: "event-one", title: "Test Meeting", start: "2026-10-02T10:30:00Z", end: "2026-10-02T11:00:00Z" },
+    { id: "event-two", title: "Test Meeting follow-up", start: "2026-10-02T11:30:00Z", end: "2026-10-02T12:00:00Z" },
+  ];
+
+  it("matches an anchor only to the exact normalized title", () => {
+    expect(findExactTitleMatches(events, " test-meeting ")).toEqual([events[0]]);
+  });
+
+  it("does not expose opaque Calendar IDs to the voice agent", () => {
+    expect(toAgentCalendarEvent(events[0])).toEqual({
+      title: "Test Meeting",
+      start: "2026-10-02T10:30:00Z",
+      end: "2026-10-02T11:00:00Z",
+    });
   });
 });
