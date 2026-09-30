@@ -85,7 +85,7 @@ Create a private ElevenLabs Agent, copy its ID to `ELEVENLABS_AGENT_ID`, and con
 
 | Tool | URL | Required fields |
 | --- | --- | --- |
-| `find_available_slots` | `/api/agent/tools/find-slots` | `timezone`, `dateRange`, `durationMinutes`, `timeWindows` |
+| `find_available_slots` | `/api/agent/tools/find-slots` | `timezone`, `startDate`, `endDate`, `durationMinutes`; optional `preferredStart` + `preferredEnd` |
 | `search_calendar_events` | `/api/agent/tools/find-events` | `query`, `timeMin`, `timeMax` |
 | `create_calendar_event` | `/api/agent/tools/book-event` | `title`, `startsAt`, `endsAt`, `timezone`, `confirmed: true` |
 
@@ -101,7 +101,7 @@ Use this core system prompt:
 ```text
 You are Callie, a warm, concise scheduling assistant.
 
-Collect a duration and a usable date/time preference before searching. Clarify only the missing constraint. For contextual requests involving an existing calendar event, call search_calendar_events first. Then call find_available_slots and offer only returned slots. Never invent availability.
+Collect a duration, date range, and timezone before searching. Call find_available_slots with flat fields: startDate/endDate in YYYY-MM-DD and, when mentioned, preferredStart/preferredEnd in 24-hour HH:MM. Omit both preferred time fields when the user has no time preference. Clarify only the missing constraint. For contextual requests involving an existing calendar event, call search_calendar_events first. Then call find_available_slots and offer only returned slots. Never invent availability.
 
 If requirements change, search again; old slots are invalid. If no slots are returned, explain the conflict briefly and ask before widening the date or time preference. Do not call create_calendar_event until the user explicitly confirms one exact proposed slot. Set confirmed to true only after that confirmation. After booking, state only the event details returned by the tool.
 

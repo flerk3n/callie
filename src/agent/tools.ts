@@ -6,7 +6,31 @@ import { markConversationStatus } from "@/agent/context";
 import { findAvailableSlots, getSearchBoundaries } from "@/scheduler/availability";
 import { slotSearchSchema } from "@/scheduler/types";
 
-export const findSlotsToolSchema = slotSearchSchema.omit({ busyIntervals: true });
+const localTimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use 24-hour HH:MM time.");
+
+// Keep the voice-agent contract deliberately flat. The ElevenLabs tool editor is
+// optimized for primitive fields; Callie normalizes them into its richer internal
+// scheduling model only after Zod validation.
+export const findSlotsToolSchema = z
+  .object({
+    timezone: z.string().min(1),
+    startDate: z.string().date(),
+    endDate: z.string().date(),
+    durationMinutes: z.number().int().min(15).max(480),
+    preferredStart: localTimeSchema.optional(),
+    preferredEnd: localTimeSchema.optional(),
+  })
+  .refine(
+    ({ preferredStart, preferredEnd }) => Boolean(preferredStart) === Boolean(preferredEnd),
+    "Provide both preferredStart and preferredEnd, or neither.",
+  )
+  .transform(({ timezone, startDate, endDate, durationMinutes, preferredStart, preferredEnd }) => ({
+    timezone,
+    dateRange: { startDate, endDate },
+    durationMinutes,
+    timeWindows: [{ start: preferredStart ?? "09:00", end: preferredEnd ?? "17:00" }],
+  }))
+  .pipe(slotSearchSchema.omit({ busyIntervals: true }));
 
 export async function findSlotsForConversation(userId: string, conversationId: string, input: z.infer<typeof findSlotsToolSchema>) {
   const boundaries = getSearchBoundaries(input);
