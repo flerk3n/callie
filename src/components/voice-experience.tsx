@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { gsap } from "gsap";
 import { ConversationProvider, useConversation } from "@elevenlabs/react";
-import { signIn } from "next-auth/react";
+import { signIn, signOut } from "next-auth/react";
 import Image from "next/image";
 import {
   ArrowUpRight,
@@ -11,7 +11,9 @@ import {
   CalendarDays,
   Check,
   ChevronRight,
+  LogOut,
   Mic,
+  UserRound,
   Waves,
 } from "lucide-react";
 import callieLogo from "../../withoutbg.png";
@@ -24,7 +26,6 @@ import { toVisibleTranscriptText } from "@/lib/transcript";
 
 type CurrentUser = {
   name?: string | null;
-  image?: string | null;
   email?: string | null;
 };
 
@@ -58,11 +59,13 @@ export function VoiceExperience({ user }: { user?: CurrentUser | null }) {
 
 function VoiceExperienceContent({ user }: { user?: CurrentUser | null }) {
   const scope = useRef<HTMLElement>(null);
+  const accountMenu = useRef<HTMLDivElement>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(calendarPreviewDate);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [isPreparingVoice, setIsPreparingVoice] = useState(false);
   const [voiceLevel, setVoiceLevel] = useState(0.16);
   const [messages, setMessages] = useState<TranscriptMessage[]>([]);
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const conversation = useConversation({
     onError: (message) => {
       setVoiceError(message);
@@ -148,6 +151,22 @@ function VoiceExperienceContent({ user }: { user?: CurrentUser | null }) {
   }, [conversation, isConnected, isSpeaking]);
 
   useEffect(() => {
+    function closeAccountMenu(event: MouseEvent) {
+      if (event.target instanceof Node && !accountMenu.current?.contains(event.target)) setIsAccountMenuOpen(false);
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setIsAccountMenuOpen(false);
+    }
+
+    window.addEventListener("mousedown", closeAccountMenu);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.removeEventListener("mousedown", closeAccountMenu);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, []);
+
+  useEffect(() => {
     function handleShortcut(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
       if (
@@ -202,7 +221,6 @@ function VoiceExperienceContent({ user }: { user?: CurrentUser | null }) {
   }
 
   const displayName = user?.name?.split(" ")[0] || user?.email?.split("@")[0] || "You";
-  const initials = displayName.slice(0, 1).toUpperCase();
   const strandsIntensity = isConnected ? Math.min(1.12, 0.28 + voiceLevel) : 0.24;
 
   return (
@@ -218,14 +236,37 @@ function VoiceExperienceContent({ user }: { user?: CurrentUser | null }) {
         </a>
 
         {user ? (
-          <div className="account-chip" title={`Connected as ${user.name ?? user.email ?? "your Google account"}`}>
-            {user.image ? (
-              <Image className="account-avatar" src={user.image} alt="" width={34} height={34} />
-            ) : (
-              <span className="account-avatar account-initials" aria-hidden="true">{initials}</span>
+          <div className="account-menu" ref={accountMenu}>
+            <div className="account-chip" title={`Connected as ${user.name ?? user.email ?? "your Google account"}`}>
+              <button
+                className="account-avatar-button"
+                type="button"
+                aria-label="Open account menu"
+                aria-expanded={isAccountMenuOpen}
+                aria-haspopup="menu"
+                onClick={() => setIsAccountMenuOpen((open) => !open)}
+              >
+                <span className="account-avatar" aria-hidden="true"><UserRound size={17} /></span>
+              </button>
+              <span className="account-name">{displayName}</span>
+              <span className="account-status"><Check size={12} /> Connected</span>
+            </div>
+            {isAccountMenuOpen && (
+              <div className="account-popover" role="menu" aria-label="Account menu">
+                <p className="account-email">{user.email ?? "Google Calendar connected"}</p>
+                <button
+                  className="logout-button"
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    conversation.endSession();
+                    void signOut({ callbackUrl: "/" });
+                  }}
+                >
+                  <LogOut size={15} /> Log out
+                </button>
+              </div>
             )}
-            <span className="account-name">{displayName}</span>
-            <span className="account-status"><Check size={12} /> Connected</span>
           </div>
         ) : (
           <button
@@ -349,7 +390,7 @@ function VoiceExperienceContent({ user }: { user?: CurrentUser | null }) {
                   ))}
                 </BubbleGroup>
               ) : (
-                <p className="transcript-empty">Start talking—your live conversation will appear here.</p>
+                <p className="transcript-empty">Start talking, your live conversation will appear here.</p>
               )}
             </div>
 
