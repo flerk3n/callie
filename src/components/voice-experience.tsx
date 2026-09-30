@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { gsap } from "gsap";
 import { ConversationProvider, useConversation } from "@elevenlabs/react";
 import { signIn } from "next-auth/react";
+import Image from "next/image";
+import callieLogo from "../../withoutbg.png";
 
 const slots = [
   { id: "1", time: "2:00 PM", duration: "45 min" },
@@ -76,7 +78,7 @@ function VoiceExperienceContent() {
     <main className="site-shell" ref={scope}>
       <div className="ambient ambient-one" /><div className="ambient ambient-two" />
       <nav className="topbar reveal" aria-label="Primary navigation">
-        <a className="brand" href="#top"><span className="brand-mark" /><span>Callie</span></a>
+        <a className="brand" href="#top"><Image className="brand-logo" src={callieLogo} alt="" priority /><span>Callie</span></a>
         <div className="nav-actions"><span className="secure"><i /> Private &amp; secure</span><button className="connect" type="button" onClick={() => void signIn("google", { callbackUrl: "/" })}><Glyph>▣</Glyph> Connect calendar</button></div>
       </nav>
 
@@ -121,7 +123,7 @@ function VoiceExperienceContent() {
           <div className="flow-caption"><i /> Checking availability safely, in real time</div>
         </div>
       </section>
-      <footer><a className="brand" href="#top"><span className="brand-mark" /><span>Callie</span></a><p>Your schedule has a softer side.</p><a href="#top">Back to top <span>→</span></a></footer>
+      <footer><a className="brand" href="#top"><Image className="brand-logo" src={callieLogo} alt="" /><span>Callie</span></a><p>Your schedule has a softer side.</p><a href="#top">Back to top <span>→</span></a></footer>
     </main>
   );
 }
