@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { gsap } from "gsap";
+import { ConversationProvider, useConversation } from "@elevenlabs/react";
+import { signIn } from "next-auth/react";
 
 const slots = [
   { id: "1", time: "2:00 PM", duration: "45 min" },
@@ -14,10 +16,20 @@ function Glyph({ children }: { children: ReactNode }) {
 }
 
 export function VoiceExperience() {
+  return (
+    <ConversationProvider>
+      <VoiceExperienceContent />
+    </ConversationProvider>
+  );
+}
+
+function VoiceExperienceContent() {
   const scope = useRef<HTMLElement>(null);
   const orb = useRef<HTMLButtonElement>(null);
-  const [isListening, setIsListening] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState("2");
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const conversation = useConversation({ onError: (message) => setVoiceError(message) });
+  const isListening = conversation.status === "connected" && conversation.isListening;
 
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -35,14 +47,31 @@ export function VoiceExperience() {
     if (orb.current) gsap.to(orb.current, { scale: isListening ? 1.05 : 1, duration: 0.25, ease: "power2.out" });
   }, [isListening]);
 
-  const toggleListening = () => setIsListening((current) => !current);
+  async function toggleListening() {
+    if (conversation.status === "connected" || conversation.status === "connecting") {
+      conversation.endSession();
+      return;
+    }
+
+    try {
+      setVoiceError(null);
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((track) => track.stop());
+      const response = await fetch("/api/voice/session", { method: "POST" });
+      const payload = await response.json() as { conversationToken?: string; error?: string };
+      if (!response.ok || !payload.conversationToken) throw new Error(payload.error ?? "Unable to start voice.");
+      conversation.startSession({ conversationToken: payload.conversationToken, connectionType: "webrtc" });
+    } catch (error) {
+      setVoiceError(error instanceof Error ? error.message : "Microphone access is required to start Callie.");
+    }
+  }
 
   return (
     <main className="site-shell" ref={scope}>
       <div className="ambient ambient-one" /><div className="ambient ambient-two" />
       <nav className="topbar reveal" aria-label="Primary navigation">
         <a className="brand" href="#top"><span className="brand-mark" /><span>Callie</span></a>
-        <div className="nav-actions"><span className="secure"><i /> Private &amp; secure</span><button className="connect" type="button"><Glyph>▣</Glyph> Connect calendar</button></div>
+        <div className="nav-actions"><span className="secure"><i /> Private &amp; secure</span><button className="connect" type="button" onClick={() => void signIn("google", { callbackUrl: "/" })}><Glyph>▣</Glyph> Connect calendar</button></div>
       </nav>
 
       <section className="hero" id="top">
@@ -55,14 +84,14 @@ export function VoiceExperience() {
 
         <section className="voice-console reveal" aria-label="Voice scheduling assistant">
           <div className="console-glow" />
-          <div className="console-meta"><span className="agent-state"><i className={isListening ? "active" : ""} />{isListening ? "Listening" : "Ready when you are"}</span><span>◷ GMT +5:30</span></div>
+          <div className="console-meta"><span className="agent-state"><i className={conversation.status === "connected" ? "active" : ""} />{conversation.status === "connecting" ? "Connecting" : isListening ? "Listening" : conversation.status === "connected" ? "Callie is here" : "Ready when you are"}</span><span>◷ GMT +5:30</span></div>
           <div className="orb-stage" aria-hidden="true"><div className="orbit orbit-one"><b /><b /><b /></div><div className="orbit orbit-two"><b /><b /></div>
             <button ref={orb} className={`voice-orb ${isListening ? "listening" : ""}`} onClick={toggleListening} type="button" aria-label={isListening ? "Stop listening" : "Start voice conversation"} aria-pressed={isListening}>
               <span className="orb-core">{isListening ? "Ⅱ" : "♩"}</span><span className="orb-shine" />
             </button>
           </div>
-          <div className="transcript"><div><span>⌁ Live conversation</span><small>00:18</small></div><p><b>You</b> Find me 45 minutes next Tuesday afternoon.</p><p className="callie-line"><b>Callie</b> I found a few calm spots that work beautifully.</p></div>
-          <button className="talk-button" type="button" onClick={toggleListening}><span>{isListening ? "Listening now" : "Talk to Callie"}</span><i>{isListening ? "⌁" : "→"}</i></button>
+          <div className="transcript"><div><span>⌁ Live conversation</span><small>{conversation.status === "connected" ? "LIVE" : "DEMO"}</small></div><p><b>You</b> Find me 45 minutes next Tuesday afternoon.</p><p className="callie-line"><b>Callie</b> {voiceError ?? "I found a few calm spots that work beautifully."}</p></div>
+          <button className="talk-button" type="button" onClick={toggleListening}><span>{conversation.status === "connecting" ? "Connecting…" : conversation.status === "connected" ? "End conversation" : "Talk to Callie"}</span><i>{conversation.status === "connected" ? "Ⅱ" : "→"}</i></button>
           <p className="shortcut"><kbd>Space</kbd> to talk <span>•</span> You can always type instead</p>
         </section>
 
