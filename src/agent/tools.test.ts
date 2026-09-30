@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bookEventToolSchema, findEventToolSchema, findSlotsToolSchema, getOfferedSlot } from "./tools";
+import { bookEventToolSchema, findEventToolSchema, findSlotsToolSchema, getOfferedSlot, usualMeetingToolSchema } from "./tools";
 
 describe("findSlotsToolSchema", () => {
   it("normalizes the flat agent payload into Callie's structured scheduler input", () => {
@@ -86,5 +86,11 @@ describe("bookEventToolSchema", () => {
       timezone: "Asia/Kolkata",
     });
     expect(getOfferedSlot(draft, "slot_2")).toBeNull();
+  });
+});
+
+describe("usualMeetingToolSchema", () => {
+  it("accepts a small, flat meeting reference from the voice agent", () => {
+    expect(usualMeetingToolSchema.parse({ meetingName: "sync-up" })).toEqual({ meetingName: "sync-up" });
   });
 });

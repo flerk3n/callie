@@ -1,10 +1,11 @@
 import { z } from "zod";
-import { getBusyIntervals, searchCalendarEvents, createConfirmedEvent } from "@/calendar/service";
+import { getBusyIntervals, searchCalendarEvents, createConfirmedEvent, inferUsualDurationFromCalendar } from "@/calendar/service";
 import { getDb } from "@/db";
 import { bookings } from "@/db/schema";
 import { markConversationStatus } from "@/agent/context";
 import { findAvailableSlots, getSearchBoundaries } from "@/scheduler/availability";
 import { slotSearchSchema } from "@/scheduler/types";
+import { getMeetingHabit, rememberMeetingHabit } from "@/lib/meeting-memory";
 
 const localTimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use 24-hour HH:MM time.");
 const agentDateRangeFields = z.object({
@@ -61,6 +62,43 @@ export const findEventToolSchema = agentDateRangeFields
 export async function findEventsForConversation(userId: string, input: z.infer<typeof findEventToolSchema>) {
   const events = await searchCalendarEvents(userId, input.query, input.timeMin, input.timeMax);
   return { events };
+}
+
+export const usualMeetingToolSchema = z.object({
+  meetingName: z.string().trim().min(1).max(120),
+});
+
+export async function getUsualMeetingForConversation(userId: string, input: z.infer<typeof usualMeetingToolSchema>) {
+  const savedHabit = await getMeetingHabit(userId, input.meetingName);
+  if (savedHabit) {
+    return {
+      found: true,
+      meetingName: savedHabit.displayName,
+      durationMinutes: savedHabit.durationMinutes,
+      source: "saved_preference",
+      observations: savedHabit.observedCount,
+    };
+  }
+
+  const inferred = await inferUsualDurationFromCalendar(userId, input.meetingName);
+  if (!inferred) {
+    return { found: false, message: "No usual duration was found. Ask the user how long this meeting should be." };
+  }
+
+  await rememberMeetingHabit({
+    userId,
+    meetingName: input.meetingName,
+    durationMinutes: inferred.durationMinutes,
+    source: "calendar_history",
+    observedCount: inferred.observations,
+  });
+  return {
+    found: true,
+    meetingName: input.meetingName,
+    durationMinutes: inferred.durationMinutes,
+    source: "calendar_history",
+    observations: inferred.observations,
+  };
 }
 
 export const bookEventToolSchema = z
@@ -123,6 +161,19 @@ export async function bookEventForConversation(userId: string, conversationId: s
     attendeeEmails: [],
     createMeetLink: true,
   });
+  const durationMinutes = Math.round((new Date(slot.end).getTime() - new Date(slot.start).getTime()) / 60_000);
+  try {
+    await rememberMeetingHabit({
+      userId,
+      meetingName: input.title,
+      durationMinutes,
+      source: "callie_booking",
+    });
+  } catch (error) {
+    // The Calendar event already exists; preference learning must never turn a
+    // successful booking into an apparent failure.
+    console.error("agent.meeting_habit_save_failed", error);
+  }
   await db.insert(bookings).values({
     userId,
     conversationId,

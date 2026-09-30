@@ -7,6 +7,8 @@ import { getActiveCalendarConnection } from "@/lib/persistence";
 
 type BusyInterval = { start: string; end: string };
 
+type HistoricalDuration = { durationMinutes: number; observations: number };
+
 export class CalendarConflictError extends Error {
   constructor() {
     super("This time was just taken. Please choose another option.");
@@ -60,6 +62,43 @@ export async function searchCalendarEvents(userId: string, query: string, timeMi
     start: event.start?.dateTime ?? event.start?.date ?? "",
     end: event.end?.dateTime ?? event.end?.date ?? "",
   }));
+}
+
+export function inferUsualDuration(events: Array<{ start?: string | null; end?: string | null }>): HistoricalDuration | null {
+  const frequencies = new Map<number, number>();
+  for (const event of events) {
+    if (!event.start || !event.end) continue;
+    const durationMinutes = Math.round((Date.parse(event.end) - Date.parse(event.start)) / 60_000);
+    if (!Number.isFinite(durationMinutes) || durationMinutes < 15 || durationMinutes > 480) continue;
+    frequencies.set(durationMinutes, (frequencies.get(durationMinutes) ?? 0) + 1);
+  }
+
+  let usual: HistoricalDuration | null = null;
+  for (const [durationMinutes, observations] of frequencies) {
+    if (!usual || observations > usual.observations || (observations === usual.observations && durationMinutes < usual.durationMinutes)) {
+      usual = { durationMinutes, observations };
+    }
+  }
+  return usual;
+}
+
+export async function inferUsualDurationFromCalendar(userId: string, query: string) {
+  const { calendar, calendarId } = await getCalendarForUser(userId);
+  const timeMax = new Date();
+  const timeMin = new Date(timeMax);
+  timeMin.setDate(timeMin.getDate() - 180);
+  const response = await calendar.events.list({
+    calendarId,
+    q: query,
+    timeMin: timeMin.toISOString(),
+    timeMax: timeMax.toISOString(),
+    singleEvents: true,
+    orderBy: "startTime",
+    maxResults: 25,
+  });
+  return inferUsualDuration(
+    (response.data.items ?? []).map((event) => ({ start: event.start?.dateTime, end: event.end?.dateTime })),
+  );
 }
 
 export const createEventSchema = z.object({

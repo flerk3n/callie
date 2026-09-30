@@ -1,11 +1,13 @@
 import { relations } from "drizzle-orm";
 import {
   index,
+  integer,
   jsonb,
   pgEnum,
   pgTable,
   text,
   timestamp,
+  unique,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -85,8 +87,29 @@ export const bookings = pgTable(
   ],
 );
 
+export const meetingHabits = pgTable(
+  "meeting_habits",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    normalizedName: text("normalized_name").notNull(),
+    displayName: text("display_name").notNull(),
+    durationMinutes: integer("duration_minutes").notNull(),
+    source: text("source").$type<"callie_booking" | "calendar_history">().notNull(),
+    observedCount: integer("observed_count").notNull(),
+    lastObservedAt: timestamp("last_observed_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    unique("meeting_habits_user_name_unique").on(table.userId, table.normalizedName),
+    index("meeting_habits_user_updated_idx").on(table.userId, table.updatedAt),
+  ],
+);
+
 export const usersRelations = relations(users, ({ many }) => ({
   calendarConnections: many(calendarConnections),
   conversations: many(conversations),
   bookings: many(bookings),
+  meetingHabits: many(meetingHabits),
 }));

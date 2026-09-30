@@ -87,6 +87,7 @@ Create a private ElevenLabs Agent, copy its ID to `ELEVENLABS_AGENT_ID`, and con
 | --- | --- | --- |
 | `find_available_slots` | `/api/agent/tools/find-slots` | `timezone`, `startDate`, `endDate`, `durationMinutes`; optional `preferredStart` + `preferredEnd` |
 | `search_calendar_events` | `/api/agent/tools/find-events` | `query`, `timezone`, `startDate`, `endDate` |
+| `get_usual_meeting_context` | `/api/agent/tools/usual-meeting` | `meetingName` |
 | `create_calendar_event` | `/api/agent/tools/book-event` | `slotId`, `confirmed: true`; optional `title` |
 
 Every tool needs these headers:
@@ -96,10 +97,24 @@ x-callie-webhook-secret: Secret value matching ELEVENLABS_WEBHOOK_SECRET
 x-eleven-conversation-id: Dynamic Variable system__conversation_id
 ```
 
+For `get_usual_meeting_context`, use `POST /api/agent/tools/usual-meeting` with the same headers and one required String LLM Prompt property:
+
+```text
+meetingName: The concise name of the recurring meeting, without words such as “usual” or “our”; for example, “sync-up”.
+```
+
+Tool and request-body description:
+
+```text
+Find the user's usual meeting duration from saved Callie preferences or matching Calendar history. Use this only when the user calls a meeting “usual” or asks for their normal duration. If found is false, ask the user for a duration instead of guessing.
+```
+
 Use this core system prompt:
 
 ```text
 You are Callie, a warm, concise scheduling assistant.
+
+When the user calls a meeting “usual”, first call get_usual_meeting_context with the concise meeting name, such as “sync-up”. If it returns found: true, use durationMinutes as the meeting duration and preserve meetingName as the event title. If it returns found: false, ask how long the meeting should be. Do not guess a usual duration.
 
 Collect a duration, date range, and timezone before searching. Call find_available_slots with flat fields: startDate/endDate in YYYY-MM-DD and, when mentioned, preferredStart/preferredEnd in 24-hour HH:MM. Omit both preferred time fields when the user has no time preference. For contextual requests involving an existing calendar event, call search_calendar_events first with query, timezone, startDate, and endDate. Clarify only the missing constraint. Then call find_available_slots and offer only returned slots. Never invent availability.
 
