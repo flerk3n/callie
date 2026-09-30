@@ -85,7 +85,7 @@ Create a private ElevenLabs Agent, copy its ID to `ELEVENLABS_AGENT_ID`, and con
 
 | Tool | URL | Required fields |
 | --- | --- | --- |
-| `find_available_slots` | `/api/agent/tools/find-slots` | `startDate`, `endDate`, `durationMinutes`; optional `exactStart` or `preferredStart` + `preferredEnd` |
+| `find_available_slots` | `/api/agent/tools/find-slots` | `durationMinutes` plus either `startDate` + `endDate`, or `anchorEventId` + `relativePosition`; optional `exactStart` or `preferredStart` + `preferredEnd` |
 | `search_calendar_events` | `/api/agent/tools/find-events` | `startDate`, `endDate`; optional `query` |
 | `get_usual_meeting_context` | `/api/agent/tools/usual-meeting` | `meetingName` |
 | `create_calendar_event` | `/api/agent/tools/book-event` | `slotId`, `confirmed: true`; optional `title` |
@@ -113,16 +113,22 @@ Find the user's usual meeting duration from saved Callie preferences or matching
 
 The browser automatically stores the user's IANA timezone at the start of every voice session. Delete the `timezone` property from both `find_available_slots` and `search_calendar_events`; Callie resolves it server-side.
 
-For `find_available_slots`, add this optional String LLM Prompt property:
+For `find_available_slots`, make `startDate` and `endDate` optional. They must be supplied together for an ordinary date-based lookup, but omitted when the meeting is relative to a Calendar event. Keep `durationMinutes` required.
+
+Add these optional String LLM Prompt properties:
 
 ```text
 exactStart: Use only when the user asks for a precise start time, such as “at 9 AM”. Send HH:MM in 24-hour time, such as 09:00. Do not send preferredStart or preferredEnd with exactStart.
+
+anchorEventId: Use only after search_calendar_events returned the named event the user means. Copy its exact id without speaking it. Omit startDate and endDate when this is supplied.
+
+relativePosition: Use only with anchorEventId. Send exactly before when the user asks to meet before that event, or after when they ask to meet after it.
 ```
 
 Keep `preferredStart` and `preferredEnd` only for a flexible range: “between 2 and 5”, “after 5”, or “in the morning”. Do not use them for an exact requested time. The search tool description and request-body description should be:
 
 ```text
-Check real Calendar availability as soon as the user has provided a date, duration, and either an exact time or a time range. exactStart is a precise requested start. preferredStart and preferredEnd are a flexible range and must be supplied together. Never ask the user to confirm an availability lookup; confirm only before creating the event.
+Check real Calendar availability as soon as the user has provided a duration plus either a date/date range or a relative Calendar event. For a precise time, use exactStart. For a flexible range, use preferredStart and preferredEnd together. For “before” or “after” a named event, first use search_calendar_events, then send anchorEventId and relativePosition and omit startDate/endDate. Never ask the user to confirm an availability lookup; confirm only before creating the event.
 ```
 
 For `search_calendar_events`, use this description:
@@ -145,13 +151,16 @@ Collecting constraints
 - “Between 2 and 5”, “after 5”, “morning”, and similar wording is a flexible range. Send preferredStart and preferredEnd together in HH:MM. Ask one brief follow-up only when a vague period needs bounds.
 - A Calendar lookup is not a booking and never needs confirmation. As soon as date, duration, and a usable time preference are known, say a short acknowledgement such as “I’ll check that,” then call find_available_slots immediately.
 - For a “usual” meeting, call get_usual_meeting_context first. If found is true, use durationMinutes and meetingName. If false, ask only for duration.
+- For “before” or “after” a named Calendar event, first use search_calendar_events. If more than one event matches, ask which one the user means. Once one event is clear, call find_available_slots with durationMinutes, its exact anchorEventId, and relativePosition `before` or `after`; omit startDate and endDate. Never speak the event ID.
 - For a request to see all events in a date range, call search_calendar_events with startDate and endDate and omit query. The result is the complete agenda for that range. If it is empty, say there are no events scheduled in that range.
 - For a request relative to an existing event or to search meetings, call search_calendar_events with a relevant query such as “design review”, “standup”, or “meetings”. This is a text search, so an empty result means only that no events matched the query; never say the Calendar is clear because of it.
 - For cancellation or changing an event, explain briefly that Callie cannot make that change. Do not make a claim about the user's Calendar unless a tool result supports it.
 
 Availability and changes
 - Offer only slots returned by find_available_slots. For an exact requested time that is available, say that exact time is open and ask whether to book it. Do not offer nearby 15-minute increments.
-- For flexible ranges, offer at most three natural spoken choices. If no slot is available, briefly name the conflict and ask permission to widen the range or try a nearby day.
+- Respect the tool response presentation guidance. For an immediately-before or immediately-after result, offer only that closest slot and say its relation naturally. For natural options, offer at most the returned distinct, spaced choices; never recite neighbouring 15-minute starts or use the same “Here are three slots” phrasing every time.
+- When the tool says to ask for a time preference, say the requested day has availability and ask for morning, afternoon, or a specific time. Do not offer or book an unstated slot.
+- If no slot is available, briefly name the conflict and ask permission to widen the range or try a nearby day.
 - When any constraint changes, run a fresh availability search. Previous slot IDs are invalid.
 
 Booking

@@ -31,6 +31,16 @@ describe("findSlotsToolSchema", () => {
     ).toEqual({ startDate: "2026-10-02", endDate: "2026-10-02", durationMinutes: 60, exactStart: "09:00" });
   });
 
+  it("accepts an event-relative request without asking the agent to repeat the event date", () => {
+    expect(
+      findSlotsToolSchema.parse({
+        durationMinutes: 60,
+        anchorEventId: "calendar-event-123",
+        relativePosition: "before",
+      }),
+    ).toEqual({ durationMinutes: 60, anchorEventId: "calendar-event-123", relativePosition: "before" });
+  });
+
   it("rejects an incomplete time preference", () => {
     expect(
       findSlotsToolSchema.safeParse({
@@ -40,6 +50,10 @@ describe("findSlotsToolSchema", () => {
         preferredStart: "13:00",
       }).success,
     ).toBe(false);
+  });
+
+  it("requires a full date range when no relative event is supplied", () => {
+    expect(findSlotsToolSchema.safeParse({ durationMinutes: 30 }).success).toBe(false);
   });
 });
 

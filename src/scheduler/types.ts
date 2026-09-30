@@ -24,6 +24,7 @@ export const slotSearchSchema = z.object({
   bufferMinutes: z.number().int().min(0).max(120).default(0),
   intervalMinutes: z.number().int().min(5).max(60).default(15),
   maxResults: z.number().int().min(1).max(12).default(3),
+  selectionStrategy: z.enum(["balanced", "earliest", "latest"]).default("balanced"),
   busyIntervals: z.array(busyIntervalSchema).default([]),
 });
 

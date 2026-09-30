@@ -1,5 +1,13 @@
 import { z } from "zod";
-import { getBusyIntervals, searchCalendarEvents, createConfirmedEvent, inferUsualDurationFromCalendar } from "@/calendar/service";
+import { Temporal } from "@js-temporal/polyfill";
+import {
+  createConfirmedEvent,
+  getBusyIntervals,
+  getCalendarEventForUser,
+  inferUsualDurationFromCalendar,
+  searchCalendarEvents,
+  type CalendarEventReference,
+} from "@/calendar/service";
 import { getDb } from "@/db";
 import { bookings } from "@/db/schema";
 import { markConversationStatus } from "@/agent/context";
@@ -16,6 +24,14 @@ const agentDateRangeFields = z.object({
 
 function hasValidDateRange({ startDate, endDate }: { startDate: string; endDate: string }) {
   return startDate <= endDate;
+}
+
+function minLocalTime(first: string, second: string) {
+  return first < second ? first : second;
+}
+
+function maxLocalTime(first: string, second: string) {
+  return first > second ? first : second;
 }
 
 const agendaSearchReferences = new Set([
@@ -59,15 +75,28 @@ function addMinutesToLocalTime(time: string, durationMinutes: number) {
 // scheduling model only after Zod validation.
 export const findSlotsToolSchema = z
   .object({
-    startDate: z.string().date(),
-    endDate: z.string().date(),
+    startDate: z.string().date().optional(),
+    endDate: z.string().date().optional(),
     durationMinutes: z.number().int().min(15).max(480),
     exactStart: localTimeSchema.optional(),
     preferredStart: localTimeSchema.optional(),
     preferredEnd: localTimeSchema.optional(),
+    anchorEventId: z.string().trim().min(1).max(500).optional(),
+    relativePosition: z.enum(["before", "after"]).optional(),
   })
-  .refine(hasValidDateRange, "The start date must not be after the end date.")
-  .superRefine(({ exactStart, preferredStart, preferredEnd, durationMinutes }, context) => {
+  .superRefine(({ startDate, endDate, exactStart, preferredStart, preferredEnd, durationMinutes, anchorEventId, relativePosition }, context) => {
+    if (Boolean(startDate) !== Boolean(endDate)) {
+      context.addIssue({ code: "custom", path: ["startDate"], message: "Provide both startDate and endDate, or neither." });
+    }
+    if (startDate && endDate && startDate > endDate) {
+      context.addIssue({ code: "custom", path: ["endDate"], message: "The start date must not be after the end date." });
+    }
+    if (!anchorEventId && (!startDate || !endDate)) {
+      context.addIssue({ code: "custom", path: ["startDate"], message: "Provide a date range unless scheduling relative to an event." });
+    }
+    if (Boolean(anchorEventId) !== Boolean(relativePosition)) {
+      context.addIssue({ code: "custom", path: ["anchorEventId"], message: "Provide anchorEventId and relativePosition together." });
+    }
     if (Boolean(preferredStart) !== Boolean(preferredEnd)) {
       context.addIssue({ code: "custom", message: "Provide both preferredStart and preferredEnd, or neither." });
     }
@@ -77,28 +106,132 @@ export const findSlotsToolSchema = z
     if (exactStart && addMinutesToLocalTime(exactStart, durationMinutes) >= "24:00") {
       context.addIssue({ code: "custom", message: "The exact meeting time must end on the same day." });
     }
+    if (anchorEventId && exactStart) {
+      context.addIssue({ code: "custom", path: ["exactStart"], message: "Use a relative event or an exact start, not both." });
+    }
     if (preferredStart && preferredEnd && preferredStart >= preferredEnd) {
       context.addIssue({ code: "custom", message: "The preferred time window must end after it starts." });
     }
   });
 
+export class RelativeSchedulingError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RelativeSchedulingError";
+  }
+}
+
+function isCalendarEventReference(value: unknown): value is CalendarEventReference {
+  return Boolean(
+    value
+    && typeof value === "object"
+    && "id" in value
+    && "title" in value
+    && "start" in value
+    && "end" in value
+    && typeof value.id === "string"
+    && typeof value.title === "string"
+    && typeof value.start === "string"
+    && typeof value.end === "string",
+  );
+}
+
+async function resolveRelativeEvent(userId: string, conversationId: string, eventId: string) {
+  const db = getDb();
+  const conversation = await db.query.conversations.findFirst({
+    columns: { schedulingDraft: true },
+    where: (conversation, { eq }) => eq(conversation.id, conversationId),
+  });
+  const draft = conversation?.schedulingDraft;
+  const eventReferences = draft && typeof draft === "object" && "eventReferences" in draft && Array.isArray(draft.eventReferences)
+    ? draft.eventReferences
+    : [];
+  if (!eventReferences.some((event) => isCalendarEventReference(event) && event.id === eventId)) {
+    throw new RelativeSchedulingError("That event was not returned by the current conversation search.");
+  }
+
+  const event = await getCalendarEventForUser(userId, eventId);
+  if (!event.start || !event.end) throw new RelativeSchedulingError("That event does not have a usable scheduled time.");
+  return event;
+}
+
+function getRelativeDateAndTime(event: CalendarEventReference, position: "before" | "after", timezone: string) {
+  const eventTime = position === "before" ? event.start : event.end;
+  try {
+    const local = Temporal.Instant.from(eventTime).toZonedDateTimeISO(timezone);
+    return {
+      date: local.toPlainDate().toString(),
+      time: local.toPlainTime().toString({ smallestUnit: "minute" }),
+    };
+  } catch {
+    throw new RelativeSchedulingError("An all-day event cannot be used as a before-or-after scheduling anchor.");
+  }
+}
+
 export async function findSlotsForConversation(userId: string, conversationId: string, input: z.infer<typeof findSlotsToolSchema>) {
   const timezone = await getUserTimezone(userId);
+  const relativeEvent = input.anchorEventId && input.relativePosition
+    ? await resolveRelativeEvent(userId, conversationId, input.anchorEventId)
+    : null;
+  const relativeAnchor = relativeEvent && input.relativePosition
+    ? getRelativeDateAndTime(relativeEvent, input.relativePosition, timezone)
+    : null;
+  const dateRange = relativeAnchor
+    ? { startDate: relativeAnchor.date, endDate: relativeAnchor.date }
+    : { startDate: input.startDate!, endDate: input.endDate! };
   const timeWindows = input.exactStart
     ? [{ start: input.exactStart, end: addMinutesToLocalTime(input.exactStart, input.durationMinutes) }]
-    : [{ start: input.preferredStart ?? "09:00", end: input.preferredEnd ?? "17:00" }];
+    : relativeAnchor && input.relativePosition === "before"
+      ? [{ start: input.preferredStart ?? "09:00", end: minLocalTime(input.preferredEnd ?? relativeAnchor.time, relativeAnchor.time) }]
+      : relativeAnchor && input.relativePosition === "after"
+        ? [{ start: maxLocalTime(input.preferredStart ?? relativeAnchor.time, relativeAnchor.time), end: input.preferredEnd ?? "17:00" }]
+        : [{ start: input.preferredStart ?? "09:00", end: input.preferredEnd ?? "17:00" }];
+  const presentation = relativeAnchor
+    ? input.relativePosition === "before" ? "immediately_before_event" : "immediately_after_event"
+    : input.exactStart
+      ? "exact_match"
+      : input.preferredStart
+        ? "natural_options"
+        : "ask_time_preference";
+  const searchBoundaries = getSearchBoundaries({ timezone, dateRange });
+
+  if (timeWindows.some((window) => window.start >= window.end)) {
+    await markConversationStatus(conversationId, "collecting", { slots: [] });
+    return {
+      slots: [],
+      searchedRange: searchBoundaries,
+      presentation,
+      message: "No time remains in the requested range on that side of the event. Ask whether another time or day works.",
+    };
+  }
   const schedulerInput = slotSearchSchema.parse({
     timezone,
-    dateRange: { startDate: input.startDate, endDate: input.endDate },
+    dateRange,
     durationMinutes: input.durationMinutes,
     timeWindows,
+    selectionStrategy: relativeAnchor
+      ? input.relativePosition === "before" ? "latest" : "earliest"
+      : "balanced",
+    maxResults: presentation === "natural_options" ? 3 : 1,
   });
   const boundaries = getSearchBoundaries(schedulerInput);
   const busyIntervals = await getBusyIntervals(userId, boundaries.start, boundaries.end);
   const search = slotSearchSchema.parse({ ...schedulerInput, busyIntervals });
   const slots = findAvailableSlots(search);
-  await markConversationStatus(conversationId, slots.length > 0 ? "offering" : "collecting", { ...input, slots });
-  return { slots, searchedRange: boundaries, message: slots.length > 0 ? "Offer these exact options to the user." : "No slots found. Ask before widening their preference." };
+  const offeredSlots = presentation === "ask_time_preference" ? [] : slots;
+  const message = slots.length === 0
+    ? "No slots found. Ask before widening the preference or trying another day."
+    : presentation === "immediately_before_event"
+      ? "Offer the one returned slot as the closest available time before the named event. Do not list grid alternatives."
+      : presentation === "immediately_after_event"
+        ? "Offer the one returned slot as the closest available time after the named event. Do not list grid alternatives."
+        : presentation === "exact_match"
+          ? "Offer the exact returned time only."
+          : presentation === "natural_options"
+            ? "Offer at most the returned distinct, naturally spaced options. Do not describe them as a default list of three slots."
+            : "Availability exists, but no time preference was supplied. Say the day has availability and ask whether morning, afternoon, or a particular time works. Do not offer or book a slot yet.";
+  await markConversationStatus(conversationId, offeredSlots.length > 0 ? "offering" : "collecting", { ...input, slots: offeredSlots });
+  return { slots: offeredSlots, searchedRange: boundaries, presentation, message };
 }
 
 export const findEventToolSchema = agentDateRangeFields
@@ -107,11 +240,14 @@ export const findEventToolSchema = agentDateRangeFields
   })
   .refine(hasValidDateRange, "The start date must not be after the end date.");
 
-export async function findEventsForConversation(userId: string, input: z.infer<typeof findEventToolSchema>) {
+export async function findEventsForConversation(userId: string, conversationId: string, input: z.infer<typeof findEventToolSchema>) {
   const timezone = await getUserTimezone(userId);
   const boundaries = getSearchBoundaries({ timezone, dateRange: { startDate: input.startDate, endDate: input.endDate } });
   const query = getCalendarEventQuery(input.query);
   const events = await searchCalendarEvents(userId, query, boundaries.start, boundaries.end);
+  await markConversationStatus(conversationId, "collecting", {
+    eventReferences: events.filter((event) => event.id && event.start && event.end).slice(0, 100),
+  });
   return {
     events,
     resultType: query ? "matching_events" : "agenda",

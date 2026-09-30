@@ -54,7 +54,48 @@ describe("findAvailableSlots", () => {
       maxResults: 1,
     });
 
-    expect(findAvailableSlots(search)[0]?.localStart).toBe("2026-10-08T13:00:00");
+    expect(findAvailableSlots(search)[0]?.localStart).toBe("2026-10-08T14:00:00");
+  });
+
+  it("ranks the slot immediately before an anchor window instead of the beginning of the day", () => {
+    const search = slotSearchSchema.parse({
+      ...baseSearch,
+      timeWindows: [{ start: "09:00", end: "15:00" }],
+      durationMinutes: 60,
+      selectionStrategy: "latest",
+      maxResults: 1,
+    });
+
+    expect(findAvailableSlots(search)[0]?.localStart).toBe("2026-10-06T14:00:00");
+  });
+
+  it("falls back to the nearest earlier free block when the time directly before an anchor is busy", () => {
+    const search = slotSearchSchema.parse({
+      ...baseSearch,
+      timeWindows: [{ start: "09:00", end: "15:00" }],
+      durationMinutes: 60,
+      selectionStrategy: "latest",
+      maxResults: 1,
+      busyIntervals: [{ start: "2026-10-06T08:00:00Z", end: "2026-10-06T09:00:00Z" }],
+    });
+
+    expect(findAvailableSlots(search)[0]?.localStart).toBe("2026-10-06T12:30:00");
+  });
+
+  it("returns naturally spaced choices across an open day rather than adjacent grid starts", () => {
+    const search = slotSearchSchema.parse({
+      ...baseSearch,
+      timeWindows: [{ start: "09:00", end: "17:00" }],
+      durationMinutes: 60,
+      selectionStrategy: "balanced",
+      maxResults: 3,
+    });
+
+    expect(findAvailableSlots(search).map((slot) => slot.localStart)).toEqual([
+      "2026-10-06T10:00:00",
+      "2026-10-06T12:30:00",
+      "2026-10-06T15:00:00",
+    ]);
   });
 
   it("uses the user's timezone to create Calendar query boundaries", () => {

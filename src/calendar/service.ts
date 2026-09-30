@@ -9,6 +9,13 @@ type BusyInterval = { start: string; end: string };
 
 type HistoricalDuration = { durationMinutes: number; observations: number };
 
+export type CalendarEventReference = {
+  id: string;
+  title: string;
+  start: string;
+  end: string;
+};
+
 export class CalendarConflictError extends Error {
   constructor() {
     super("This time was just taken. Please choose another option.");
@@ -35,6 +42,20 @@ async function getCalendarForUser(userId: string) {
   return { calendar: google.calendar({ version: "v3", auth }), calendarId: connection.selectedCalendarId };
 }
 
+function toCalendarEventReference(event: {
+  id?: string | null;
+  summary?: string | null;
+  start?: { dateTime?: string | null; date?: string | null } | null;
+  end?: { dateTime?: string | null; date?: string | null } | null;
+}): CalendarEventReference {
+  return {
+    id: event.id ?? "",
+    title: event.summary ?? "Untitled event",
+    start: event.start?.dateTime ?? event.start?.date ?? "",
+    end: event.end?.dateTime ?? event.end?.date ?? "",
+  };
+}
+
 export async function getBusyIntervals(userId: string, timeMin: string, timeMax: string): Promise<BusyInterval[]> {
   const { calendar, calendarId } = await getCalendarForUser(userId);
   const response = await calendar.freebusy.query({
@@ -56,12 +77,13 @@ export async function searchCalendarEvents(userId: string, query: string | undef
     orderBy: "startTime",
     maxResults: 2500,
   });
-  return (response.data.items ?? []).map((event) => ({
-    id: event.id ?? "",
-    title: event.summary ?? "Untitled event",
-    start: event.start?.dateTime ?? event.start?.date ?? "",
-    end: event.end?.dateTime ?? event.end?.date ?? "",
-  }));
+  return (response.data.items ?? []).map(toCalendarEventReference);
+}
+
+export async function getCalendarEventForUser(userId: string, eventId: string) {
+  const { calendar, calendarId } = await getCalendarForUser(userId);
+  const response = await calendar.events.get({ calendarId, eventId });
+  return toCalendarEventReference(response.data);
 }
 
 export function inferUsualDuration(events: Array<{ start?: string | null; end?: string | null }>): HistoricalDuration | null {
