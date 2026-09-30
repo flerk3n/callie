@@ -18,6 +18,7 @@ import { getMeetingHabit, rememberMeetingHabit } from "@/lib/meeting-memory";
 import { getUserTimezone } from "@/lib/persistence";
 
 const localTimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use 24-hour HH:MM time.");
+export const DEFAULT_AVAILABILITY_WINDOW = { start: "09:00", end: "21:00" } as const;
 const agentDateRangeFields = z.object({
   startDate: z.string().date(),
   endDate: z.string().date(),
@@ -193,10 +194,10 @@ export async function findSlotsForConversation(userId: string, conversationId: s
   const timeWindows = input.exactStart
     ? [{ start: input.exactStart, end: addMinutesToLocalTime(input.exactStart, input.durationMinutes) }]
     : relativeAnchor && input.relativePosition === "before"
-      ? [{ start: input.preferredStart ?? "09:00", end: minLocalTime(input.preferredEnd ?? relativeAnchor.time, relativeAnchor.time) }]
+      ? [{ start: input.preferredStart ?? DEFAULT_AVAILABILITY_WINDOW.start, end: minLocalTime(input.preferredEnd ?? relativeAnchor.time, relativeAnchor.time) }]
       : relativeAnchor && input.relativePosition === "after"
-        ? [{ start: maxLocalTime(input.preferredStart ?? relativeAnchor.time, relativeAnchor.time), end: input.preferredEnd ?? "17:00" }]
-        : [{ start: input.preferredStart ?? "09:00", end: input.preferredEnd ?? "17:00" }];
+        ? [{ start: maxLocalTime(input.preferredStart ?? relativeAnchor.time, relativeAnchor.time), end: input.preferredEnd ?? DEFAULT_AVAILABILITY_WINDOW.end }]
+        : [{ start: input.preferredStart ?? DEFAULT_AVAILABILITY_WINDOW.start, end: input.preferredEnd ?? DEFAULT_AVAILABILITY_WINDOW.end }];
   const presentation = relativeAnchor
     ? input.relativePosition === "before" ? "immediately_before_event" : "immediately_after_event"
     : input.exactStart

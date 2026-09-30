@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { bookEventToolSchema, findEventToolSchema, findSlotsToolSchema, getCalendarEventQuery, getOfferedSlot, usualMeetingToolSchema } from "./tools";
+import { DEFAULT_AVAILABILITY_WINDOW, bookEventToolSchema, findEventToolSchema, findSlotsToolSchema, getCalendarEventQuery, getOfferedSlot, usualMeetingToolSchema } from "./tools";
+
+describe("availability defaults", () => {
+  it("searches flexible and relative availability from 9 AM through 9 PM", () => {
+    expect(DEFAULT_AVAILABILITY_WINDOW).toEqual({ start: "09:00", end: "21:00" });
+  });
+});
 
 describe("findSlotsToolSchema", () => {
   it("accepts a flat time-window request without asking the agent for timezone", () => {
