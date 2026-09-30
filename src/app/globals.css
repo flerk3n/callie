@@ -176,7 +176,6 @@ a { color: inherit; }
 .strands-wrap { position: relative; flex: 1; min-height: 230px; margin: 9px -20px 0; overflow: hidden; }
 .strands-wrap::before { position: absolute; z-index: 1; inset: 0; background: radial-gradient(circle at center, rgba(255, 255, 255, 0) 16%, rgba(244, 247, 255, 0.73) 74%); content: ""; pointer-events: none; }
 .strands-container { position: absolute !important; inset: 0; }
-.strands-center { position: absolute; z-index: 2; top: 50%; left: 50%; width: 94px; height: 94px; border: 1px solid rgba(0, 61, 255, 0.15); border-radius: 50%; background: radial-gradient(circle at 35% 25%, white, rgba(235, 240, 255, 0.56)); box-shadow: 0 15px 40px rgba(0, 61, 255, 0.13), inset 0 1px white; transform: translate(-50%, -50%); }
 .voice-action { position: relative; z-index: 3; display: flex; align-items: center; align-self: center; gap: 11px; min-height: 48px; padding: 5px 7px 5px 6px; border: 1px solid var(--blue); border-radius: 999px; background: var(--blue); box-shadow: 0 13px 26px rgba(0, 61, 255, 0.2); color: white; font-family: var(--font-sora), sans-serif; font-size: 13px; font-weight: 600; transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease; }
 .voice-action:hover { transform: translateY(-2px); background: var(--blue-soft); box-shadow: 0 17px 30px rgba(0, 61, 255, 0.29); }
 .voice-action.is-listening { background: #5747d3; border-color: #5747d3; }
@@ -196,6 +195,7 @@ a { color: inherit; }
 .session-pill.is-live i { background: #38b86e; box-shadow: 0 0 0 4px rgba(56, 184, 110, 0.1); }
 .transcript-scroll { flex: 1; min-height: 278px; margin-top: 27px; overflow: auto; scrollbar-color: #cdd4ed transparent; scrollbar-width: thin; }
 .conversation-list { gap: 17px !important; padding: 2px 3px 8px; }
+.transcript-empty { display: grid; min-height: 100%; margin: 0; place-items: center; color: var(--ink-muted); font-size: 13px; text-align: center; }
 .conversation-bubble { gap: 4px !important; max-width: 84% !important; }
 .message-speaker { color: #7b7f9e; font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; }
 .conversation-bubble.user .message-speaker { align-self: flex-end; color: var(--blue); }

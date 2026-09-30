@@ -34,14 +34,6 @@ type TranscriptMessage = {
   text: string;
 };
 
-const initialTranscript: TranscriptMessage[] = [
-  {
-    id: "callie-welcome",
-    role: "agent",
-    text: "Hi, I’m Callie. Ask me to find a time, move a meeting, or protect your focus.",
-  },
-];
-
 const calendarPreviewDate = new Date(2026, 8, 30);
 
 function Glyph({ children }: { children: ReactNode }) {
@@ -70,7 +62,7 @@ function VoiceExperienceContent({ user }: { user?: CurrentUser | null }) {
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [isPreparingVoice, setIsPreparingVoice] = useState(false);
   const [voiceLevel, setVoiceLevel] = useState(0.16);
-  const [messages, setMessages] = useState<TranscriptMessage[]>(initialTranscript);
+  const [messages, setMessages] = useState<TranscriptMessage[]>([]);
   const conversation = useConversation({
     onError: (message) => {
       setVoiceError(message);
@@ -311,7 +303,6 @@ function VoiceExperienceContent({ user }: { user?: CurrentUser | null }) {
                 opacity={0.94}
                 scale={1.22}
               />
-              <span className="strands-center" />
             </div>
             <button
               className={`voice-action ${isListening ? "is-listening" : ""} ${isPreparingVoice ? "is-preparing" : ""}`}
@@ -343,19 +334,23 @@ function VoiceExperienceContent({ user }: { user?: CurrentUser | null }) {
             </header>
 
             <div className="transcript-scroll" role="log" aria-live="polite" aria-label="Live conversation transcript">
-              <BubbleGroup className="conversation-list">
-                {messages.map((message) => (
-                  <Bubble
-                    key={message.id}
-                    variant={message.role === "user" ? "default" : "secondary"}
-                    align={message.role === "user" ? "end" : "start"}
-                    className={`conversation-bubble ${message.role}`}
-                  >
-                    <span className="message-speaker">{message.role === "user" ? "You" : "Callie"}</span>
-                    <BubbleContent className="conversation-content">{message.text}</BubbleContent>
-                  </Bubble>
-                ))}
-              </BubbleGroup>
+              {messages.length > 0 ? (
+                <BubbleGroup className="conversation-list">
+                  {messages.map((message) => (
+                    <Bubble
+                      key={message.id}
+                      variant={message.role === "user" ? "default" : "secondary"}
+                      align={message.role === "user" ? "end" : "start"}
+                      className={`conversation-bubble ${message.role}`}
+                    >
+                      <span className="message-speaker">{message.role === "user" ? "You" : "Callie"}</span>
+                      <BubbleContent className="conversation-content">{message.text}</BubbleContent>
+                    </Bubble>
+                  ))}
+                </BubbleGroup>
+              ) : (
+                <p className="transcript-empty">Start talking—your live conversation will appear here.</p>
+              )}
             </div>
 
           </section>
