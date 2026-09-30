@@ -1,7 +1,9 @@
 import type { Account, Profile } from "next-auth";
+import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { calendarConnections, users } from "@/db/schema";
 import { encryptSecret } from "@/lib/crypto";
+import { isSupportedTimeZone } from "@/lib/timezone";
 
 type GoogleProfile = Profile & { sub?: string; email?: string; name?: string; picture?: string };
 
@@ -44,4 +46,19 @@ export async function getActiveCalendarConnection(userId: string) {
   return db.query.calendarConnections.findFirst({
     where: (connection, { and, eq: equals, isNull }) => and(equals(connection.userId, userId), isNull(connection.disconnectedAt)),
   });
+}
+
+export async function updateUserTimezone(userId: string, timezone: string) {
+  if (!isSupportedTimeZone(timezone)) throw new Error("Unsupported timezone.");
+  const db = getDb();
+  await db.update(users).set({ timezone, updatedAt: new Date() }).where(eq(users.id, userId));
+}
+
+export async function getUserTimezone(userId: string) {
+  const db = getDb();
+  const user = await db.query.users.findFirst({
+    columns: { timezone: true },
+    where: eq(users.id, userId),
+  });
+  return user?.timezone && isSupportedTimeZone(user.timezone) ? user.timezone : "UTC";
 }

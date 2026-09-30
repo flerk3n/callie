@@ -57,7 +57,13 @@ function VoiceExperienceContent() {
       setVoiceError(null);
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getTracks().forEach((track) => track.stop());
-      const response = await fetch("/api/voice/session", { method: "POST" });
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (!timezone) throw new Error("Your browser could not determine a timezone.");
+      const response = await fetch("/api/voice/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ timezone }),
+      });
       const payload = await response.json() as { conversationToken?: string; error?: string };
       if (!response.ok || !payload.conversationToken) throw new Error(payload.error ?? "Unable to start voice.");
       conversation.startSession({ conversationToken: payload.conversationToken, connectionType: "webrtc" });
@@ -84,7 +90,7 @@ function VoiceExperienceContent() {
 
         <section className="voice-console reveal" aria-label="Voice scheduling assistant">
           <div className="console-glow" />
-          <div className="console-meta"><span className="agent-state"><i className={conversation.status === "connected" ? "active" : ""} />{conversation.status === "connecting" ? "Connecting" : isListening ? "Listening" : conversation.status === "connected" ? "Callie is here" : "Ready when you are"}</span><span>◷ GMT +5:30</span></div>
+          <div className="console-meta"><span className="agent-state"><i className={conversation.status === "connected" ? "active" : ""} />{conversation.status === "connecting" ? "Connecting" : isListening ? "Listening" : conversation.status === "connected" ? "Callie is here" : "Ready when you are"}</span><span>◷ Your local time</span></div>
           <div className="orb-stage" aria-hidden="true"><div className="orbit orbit-one"><b /><b /><b /></div><div className="orbit orbit-two"><b /><b /></div>
             <button ref={orb} className={`voice-orb ${isListening ? "listening" : ""}`} onClick={toggleListening} type="button" aria-label={isListening ? "Stop listening" : "Start voice conversation"} aria-pressed={isListening}>
               <span className="orb-core">{isListening ? "Ⅱ" : "♩"}</span><span className="orb-shine" />

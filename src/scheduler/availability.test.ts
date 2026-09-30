@@ -35,6 +35,17 @@ describe("findAvailableSlots", () => {
     expect(findAvailableSlots(search).map((slot) => slot.localStart)).toEqual(["2026-10-06T14:30:00"]);
   });
 
+  it("returns only the exact requested start when its window is one meeting long", () => {
+    const search = slotSearchSchema.parse({
+      ...baseSearch,
+      timeWindows: [{ start: "09:00", end: "10:00" }],
+      durationMinutes: 60,
+      maxResults: 3,
+    });
+
+    expect(findAvailableSlots(search).map((slot) => slot.localStart)).toEqual(["2026-10-06T09:00:00"]);
+  });
+
   it("honors excluded weekdays while searching across dates", () => {
     const search = slotSearchSchema.parse({
       ...baseSearch,

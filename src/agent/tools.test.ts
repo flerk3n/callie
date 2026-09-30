@@ -2,10 +2,9 @@ import { describe, expect, it } from "vitest";
 import { bookEventToolSchema, findEventToolSchema, findSlotsToolSchema, getOfferedSlot, usualMeetingToolSchema } from "./tools";
 
 describe("findSlotsToolSchema", () => {
-  it("normalizes the flat agent payload into Callie's structured scheduler input", () => {
+  it("accepts a flat time-window request without asking the agent for timezone", () => {
     expect(
       findSlotsToolSchema.parse({
-        timezone: "Asia/Kolkata",
         startDate: "2026-10-02",
         endDate: "2026-10-03",
         durationMinutes: 30,
@@ -13,32 +12,28 @@ describe("findSlotsToolSchema", () => {
         preferredEnd: "17:00",
       }),
     ).toEqual({
-      timezone: "Asia/Kolkata",
-      dateRange: { startDate: "2026-10-02", endDate: "2026-10-03" },
+      startDate: "2026-10-02",
+      endDate: "2026-10-03",
       durationMinutes: 30,
-      timeWindows: [{ start: "13:00", end: "17:00" }],
-      excludedWeekdays: [],
-      bufferMinutes: 0,
-      intervalMinutes: 15,
-      maxResults: 3,
+      preferredStart: "13:00",
+      preferredEnd: "17:00",
     });
   });
 
-  it("uses a standard working-hours window when the user has no time preference", () => {
+  it("accepts an exact requested start without turning it into a broad window", () => {
     expect(
       findSlotsToolSchema.parse({
-        timezone: "Asia/Kolkata",
         startDate: "2026-10-02",
         endDate: "2026-10-02",
-        durationMinutes: 30,
-      }).timeWindows,
-    ).toEqual([{ start: "09:00", end: "17:00" }]);
+        durationMinutes: 60,
+        exactStart: "09:00",
+      }),
+    ).toEqual({ startDate: "2026-10-02", endDate: "2026-10-02", durationMinutes: 60, exactStart: "09:00" });
   });
 
   it("rejects an incomplete time preference", () => {
     expect(
       findSlotsToolSchema.safeParse({
-        timezone: "Asia/Kolkata",
         startDate: "2026-10-02",
         endDate: "2026-10-02",
         durationMinutes: 30,
@@ -49,18 +44,17 @@ describe("findSlotsToolSchema", () => {
 });
 
 describe("findEventToolSchema", () => {
-  it("turns simple local dates into Calendar API boundaries", () => {
+  it("keeps event search fields flat and timezone-free for the voice agent", () => {
     expect(
       findEventToolSchema.parse({
         query: "design review",
-        timezone: "Asia/Kolkata",
         startDate: "2026-10-02",
         endDate: "2026-10-02",
       }),
     ).toEqual({
       query: "design review",
-      timeMin: "2026-10-01T18:30:00Z",
-      timeMax: "2026-10-02T18:30:00Z",
+      startDate: "2026-10-02",
+      endDate: "2026-10-02",
     });
   });
 });

@@ -3,12 +3,21 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { getDb } from "@/db";
 import { conversations } from "@/db/schema";
+import { updateUserTimezone } from "@/lib/persistence";
+import { isSupportedTimeZone } from "@/lib/timezone";
 
 const tokenResponseSchema = z.object({ token: z.string().min(1), conversation_id: z.string().min(1) });
+const sessionRequestSchema = z.object({
+  timezone: z.string().min(1).max(100).refine(isSupportedTimeZone, "Use a supported IANA timezone."),
+});
 
-export async function POST() {
+export async function POST(request: Request) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Sign in with Google before starting Callie." }, { status: 401 });
+
+  const requestBody = sessionRequestSchema.safeParse(await request.json().catch(() => null));
+  if (!requestBody.success) return NextResponse.json({ error: "A valid browser timezone is required to start Callie." }, { status: 400 });
+  await updateUserTimezone(session.user.id, requestBody.data.timezone);
 
   const agentId = process.env.ELEVENLABS_AGENT_ID;
   const apiKey = process.env.ELEVENLABS_API_KEY;

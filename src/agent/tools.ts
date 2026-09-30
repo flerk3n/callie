@@ -6,10 +6,10 @@ import { markConversationStatus } from "@/agent/context";
 import { findAvailableSlots, getSearchBoundaries } from "@/scheduler/availability";
 import { slotSearchSchema } from "@/scheduler/types";
 import { getMeetingHabit, rememberMeetingHabit } from "@/lib/meeting-memory";
+import { getUserTimezone } from "@/lib/persistence";
 
 const localTimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use 24-hour HH:MM time.");
 const agentDateRangeFields = z.object({
-  timezone: z.string().min(1),
   startDate: z.string().date(),
   endDate: z.string().date(),
 });
@@ -18,34 +18,54 @@ function hasValidDateRange({ startDate, endDate }: { startDate: string; endDate:
   return startDate <= endDate;
 }
 
+function addMinutesToLocalTime(time: string, durationMinutes: number) {
+  const [hours, minutes] = time.split(":").map(Number);
+  const totalMinutes = hours * 60 + minutes + durationMinutes;
+  return `${String(Math.floor(totalMinutes / 60)).padStart(2, "0")}:${String(totalMinutes % 60).padStart(2, "0")}`;
+}
+
 // Keep the voice-agent contract deliberately flat. The ElevenLabs tool editor is
 // optimized for primitive fields; Callie normalizes them into its richer internal
 // scheduling model only after Zod validation.
 export const findSlotsToolSchema = z
   .object({
-    timezone: z.string().min(1),
     startDate: z.string().date(),
     endDate: z.string().date(),
     durationMinutes: z.number().int().min(15).max(480),
+    exactStart: localTimeSchema.optional(),
     preferredStart: localTimeSchema.optional(),
     preferredEnd: localTimeSchema.optional(),
   })
-  .refine(
-    ({ preferredStart, preferredEnd }) => Boolean(preferredStart) === Boolean(preferredEnd),
-    "Provide both preferredStart and preferredEnd, or neither.",
-  )
-  .transform(({ timezone, startDate, endDate, durationMinutes, preferredStart, preferredEnd }) => ({
-    timezone,
-    dateRange: { startDate, endDate },
-    durationMinutes,
-    timeWindows: [{ start: preferredStart ?? "09:00", end: preferredEnd ?? "17:00" }],
-  }))
-  .pipe(slotSearchSchema.omit({ busyIntervals: true }));
+  .refine(hasValidDateRange, "The start date must not be after the end date.")
+  .superRefine(({ exactStart, preferredStart, preferredEnd, durationMinutes }, context) => {
+    if (Boolean(preferredStart) !== Boolean(preferredEnd)) {
+      context.addIssue({ code: "custom", message: "Provide both preferredStart and preferredEnd, or neither." });
+    }
+    if (exactStart && (preferredStart || preferredEnd)) {
+      context.addIssue({ code: "custom", message: "Use exactStart or a preferred time range, not both." });
+    }
+    if (exactStart && addMinutesToLocalTime(exactStart, durationMinutes) >= "24:00") {
+      context.addIssue({ code: "custom", message: "The exact meeting time must end on the same day." });
+    }
+    if (preferredStart && preferredEnd && preferredStart >= preferredEnd) {
+      context.addIssue({ code: "custom", message: "The preferred time window must end after it starts." });
+    }
+  });
 
 export async function findSlotsForConversation(userId: string, conversationId: string, input: z.infer<typeof findSlotsToolSchema>) {
-  const boundaries = getSearchBoundaries(input);
+  const timezone = await getUserTimezone(userId);
+  const timeWindows = input.exactStart
+    ? [{ start: input.exactStart, end: addMinutesToLocalTime(input.exactStart, input.durationMinutes) }]
+    : [{ start: input.preferredStart ?? "09:00", end: input.preferredEnd ?? "17:00" }];
+  const schedulerInput = slotSearchSchema.parse({
+    timezone,
+    dateRange: { startDate: input.startDate, endDate: input.endDate },
+    durationMinutes: input.durationMinutes,
+    timeWindows,
+  });
+  const boundaries = getSearchBoundaries(schedulerInput);
   const busyIntervals = await getBusyIntervals(userId, boundaries.start, boundaries.end);
-  const search = slotSearchSchema.parse({ ...input, busyIntervals });
+  const search = slotSearchSchema.parse({ ...schedulerInput, busyIntervals });
   const slots = findAvailableSlots(search);
   await markConversationStatus(conversationId, slots.length > 0 ? "offering" : "collecting", { ...input, slots });
   return { slots, searchedRange: boundaries, message: slots.length > 0 ? "Offer these exact options to the user." : "No slots found. Ask before widening their preference." };
@@ -53,14 +73,12 @@ export async function findSlotsForConversation(userId: string, conversationId: s
 
 export const findEventToolSchema = agentDateRangeFields
   .extend({ query: z.string().trim().min(1).max(200) })
-  .refine(hasValidDateRange, "The start date must not be after the end date.")
-  .transform(({ query, timezone, startDate, endDate }) => {
-    const boundaries = getSearchBoundaries({ timezone, dateRange: { startDate, endDate } });
-    return { query, timeMin: boundaries.start, timeMax: boundaries.end };
-  });
+  .refine(hasValidDateRange, "The start date must not be after the end date.");
 
 export async function findEventsForConversation(userId: string, input: z.infer<typeof findEventToolSchema>) {
-  const events = await searchCalendarEvents(userId, input.query, input.timeMin, input.timeMax);
+  const timezone = await getUserTimezone(userId);
+  const boundaries = getSearchBoundaries({ timezone, dateRange: { startDate: input.startDate, endDate: input.endDate } });
+  const events = await searchCalendarEvents(userId, input.query, boundaries.start, boundaries.end);
   return { events };
 }
 
@@ -182,5 +200,5 @@ export async function bookEventForConversation(userId: string, conversationId: s
     endsAt: new Date(slot.end),
   });
   await markConversationStatus(conversationId, "complete");
-  return { event, message: "The event is created. Confirm only the details returned here." };
+  return { booked: true, message: "Meeting booked successfully. Confirm the selected time concisely; never read URLs, event IDs, or technical details aloud." };
 }
