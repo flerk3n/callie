@@ -20,6 +20,7 @@ import { Bubble, BubbleContent, BubbleGroup } from "@/components/ui/bubble";
 import { Calendar } from "@/components/ui/calendar";
 import { GradientWave } from "@/components/ui/gradient-wave";
 import { enUS } from "date-fns/locale";
+import { toVisibleTranscriptText } from "@/lib/transcript";
 
 type CurrentUser = {
   name?: string | null;
@@ -79,11 +80,14 @@ function VoiceExperienceContent({ user }: { user?: CurrentUser | null }) {
       if (status === "connecting" || status === "connected") setIsPreparingVoice(false);
     },
     onMessage: (message) => {
+      const text = toVisibleTranscriptText(message.message);
+      if (!text) return;
+
       setMessages((current) => {
         const nextMessage = {
           id: `${message.event_id}-${message.role}`,
           role: message.role,
-          text: message.message,
+          text,
         } satisfies TranscriptMessage;
         const withoutDuplicate = current.filter((item) => item.id !== nextMessage.id);
         return [...withoutDuplicate, nextMessage].slice(-6);
