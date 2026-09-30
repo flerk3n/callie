@@ -86,7 +86,7 @@ Create a private ElevenLabs Agent, copy its ID to `ELEVENLABS_AGENT_ID`, and con
 | Tool | URL | Required fields |
 | --- | --- | --- |
 | `find_available_slots` | `/api/agent/tools/find-slots` | `startDate`, `endDate`, `durationMinutes`; optional `exactStart` or `preferredStart` + `preferredEnd` |
-| `search_calendar_events` | `/api/agent/tools/find-events` | `query`, `startDate`, `endDate` |
+| `search_calendar_events` | `/api/agent/tools/find-events` | `startDate`, `endDate`; optional `query` |
 | `get_usual_meeting_context` | `/api/agent/tools/usual-meeting` | `meetingName` |
 | `create_calendar_event` | `/api/agent/tools/book-event` | `slotId`, `confirmed: true`; optional `title` |
 
@@ -128,7 +128,7 @@ Check real Calendar availability as soon as the user has provided a date, durati
 For `search_calendar_events`, use this description:
 
 ```text
-Search for one specific named existing Calendar event, such as “design review” or “standup,” when scheduling relative to it. The user's timezone is supplied by Callie; provide only query, startDate, and endDate. Never use generic queries such as “events”, “meetings”, “calendar”, “schedule”, or “availability”: this tool is a text search, not an agenda/listing tool. An empty result means only that no event matched the specific reference; it never means the Calendar is clear.
+List the user's actual Calendar events in a date range, or search that range for an event reference. The user's timezone is supplied by Callie; provide startDate and endDate. Omit query to return the complete agenda, for example when the user asks “what is on tomorrow?” Use query only to text-search a reference such as “design review” or “meetings”. An empty agenda result means no events are scheduled in the date range; an empty query result means only that no events matched the query.
 ```
 
 Use this core system prompt:
@@ -145,9 +145,9 @@ Collecting constraints
 - “Between 2 and 5”, “after 5”, “morning”, and similar wording is a flexible range. Send preferredStart and preferredEnd together in HH:MM. Ask one brief follow-up only when a vague period needs bounds.
 - A Calendar lookup is not a booking and never needs confirmation. As soon as date, duration, and a usable time preference are known, say a short acknowledgement such as “I’ll check that,” then call find_available_slots immediately.
 - For a “usual” meeting, call get_usual_meeting_context first. If found is true, use durationMinutes and meetingName. If false, ask only for duration.
-- For a request relative to one named existing event, call search_calendar_events first. Its query must be a specific reference such as “design review” or “standup”; never send generic words such as “events”, “meetings”, “calendar”, “schedule”, or “availability”. Use returned events as facts; do not invent dates or availability.
-- An empty search_calendar_events result means only that no event matched that specific reference. Never say the Calendar is clear, empty, or free because of it.
-- For a generic request to list the Calendar, check whether it is free, or cancel/change an event, explain briefly that Callie can find time for a new meeting or look up a specifically named event. Do not call search_calendar_events and do not make a claim about the user's Calendar.
+- For a request to see all events in a date range, call search_calendar_events with startDate and endDate and omit query. The result is the complete agenda for that range. If it is empty, say there are no events scheduled in that range.
+- For a request relative to an existing event or to search meetings, call search_calendar_events with a relevant query such as “design review”, “standup”, or “meetings”. This is a text search, so an empty result means only that no events matched the query; never say the Calendar is clear because of it.
+- For cancellation or changing an event, explain briefly that Callie cannot make that change. Do not make a claim about the user's Calendar unless a tool result supports it.
 
 Availability and changes
 - Offer only slots returned by find_available_slots. For an exact requested time that is available, say that exact time is open and ask whether to book it. Do not offer nearby 15-minute increments.

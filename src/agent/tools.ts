@@ -18,22 +18,15 @@ function hasValidDateRange({ startDate, endDate }: { startDate: string; endDate:
   return startDate <= endDate;
 }
 
-const genericEventReferences = new Set([
+const agendaSearchReferences = new Set([
   "agenda",
-  "appointment",
-  "appointments",
-  "availability",
   "calendar",
   "event",
   "events",
-  "meeting",
-  "meetings",
   "my agenda",
   "my calendar",
   "my events",
-  "my meetings",
   "my schedule",
-  "plans",
   "schedule",
 ]);
 
@@ -46,12 +39,13 @@ function normalizeEventReference(query: string) {
 }
 
 /**
- * Google Calendar's `q` parameter is a text-match filter, not an agenda
- * lookup. Reject generic requests so an empty text match can never be
- * mistaken for an empty Calendar.
+ * Google Calendar's `q` parameter is a text-match filter. A generic request
+ * for the day's events must omit it so Calendar returns the complete agenda.
+ * Keep non-generic terms such as “meeting” as a text query by design.
  */
-export function isSpecificEventReference(query: string) {
-  return !genericEventReferences.has(normalizeEventReference(query));
+export function getCalendarEventQuery(query: string | undefined) {
+  if (!query || agendaSearchReferences.has(normalizeEventReference(query))) return undefined;
+  return query;
 }
 
 function addMinutesToLocalTime(time: string, durationMinutes: number) {
@@ -109,20 +103,22 @@ export async function findSlotsForConversation(userId: string, conversationId: s
 
 export const findEventToolSchema = agentDateRangeFields
   .extend({
-    query: z
-      .string()
-      .trim()
-      .min(1)
-      .max(200)
-      .refine(isSpecificEventReference, "Use a specific event name, not a generic calendar or availability request."),
+    query: z.string().trim().min(1).max(200).optional(),
   })
   .refine(hasValidDateRange, "The start date must not be after the end date.");
 
 export async function findEventsForConversation(userId: string, input: z.infer<typeof findEventToolSchema>) {
   const timezone = await getUserTimezone(userId);
   const boundaries = getSearchBoundaries({ timezone, dateRange: { startDate: input.startDate, endDate: input.endDate } });
-  const events = await searchCalendarEvents(userId, input.query, boundaries.start, boundaries.end);
-  return { events };
+  const query = getCalendarEventQuery(input.query);
+  const events = await searchCalendarEvents(userId, query, boundaries.start, boundaries.end);
+  return {
+    events,
+    resultType: query ? "matching_events" : "agenda",
+    message: query
+      ? "These are the events matching the requested reference. An empty result means no matching event was found."
+      : "This is the complete Calendar agenda for the requested date range. An empty result means no events are scheduled in that range.",
+  };
 }
 
 export const usualMeetingToolSchema = z.object({

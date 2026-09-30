@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bookEventToolSchema, findEventToolSchema, findSlotsToolSchema, getOfferedSlot, isSpecificEventReference, usualMeetingToolSchema } from "./tools";
+import { bookEventToolSchema, findEventToolSchema, findSlotsToolSchema, getCalendarEventQuery, getOfferedSlot, usualMeetingToolSchema } from "./tools";
 
 describe("findSlotsToolSchema", () => {
   it("accepts a flat time-window request without asking the agent for timezone", () => {
@@ -58,12 +58,21 @@ describe("findEventToolSchema", () => {
     });
   });
 
-  it("rejects generic agenda requests that Calendar text search cannot answer", () => {
-    for (const query of ["events", "my meetings", "calendar", "availability"]) {
-      expect(findEventToolSchema.safeParse({ query, startDate: "2026-10-02", endDate: "2026-10-02" }).success).toBe(false);
-      expect(isSpecificEventReference(query)).toBe(false);
+  it("accepts an agenda request without a text query", () => {
+    expect(
+      findEventToolSchema.parse({
+        startDate: "2026-10-02",
+        endDate: "2026-10-02",
+      }),
+    ).toEqual({ startDate: "2026-10-02", endDate: "2026-10-02" });
+  });
+
+  it("turns generic event words into an agenda lookup but keeps meeting searches as queries", () => {
+    for (const query of ["events", "my calendar", "agenda"]) {
+      expect(getCalendarEventQuery(query)).toBeUndefined();
     }
-    expect(isSpecificEventReference("design review")).toBe(true);
+    expect(getCalendarEventQuery("meetings")).toBe("meetings");
+    expect(getCalendarEventQuery("design review")).toBe("design review");
   });
 });
 

@@ -45,16 +45,16 @@ export async function getBusyIntervals(userId: string, timeMin: string, timeMax:
     .map(({ start, end }) => ({ start, end }));
 }
 
-export async function searchCalendarEvents(userId: string, query: string, timeMin: string, timeMax: string) {
+export async function searchCalendarEvents(userId: string, query: string | undefined, timeMin: string, timeMax: string) {
   const { calendar, calendarId } = await getCalendarForUser(userId);
   const response = await calendar.events.list({
     calendarId,
-    q: query,
+    ...(query ? { q: query } : {}),
     timeMin,
     timeMax,
     singleEvents: true,
     orderBy: "startTime",
-    maxResults: 10,
+    maxResults: 2500,
   });
   return (response.data.items ?? []).map((event) => ({
     id: event.id ?? "",
