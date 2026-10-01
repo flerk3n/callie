@@ -11,10 +11,12 @@ import {
   CalendarDays,
   Check,
   ChevronRight,
+  Clock3,
   LogOut,
   Mic,
   UserRound,
   Waves,
+  X,
 } from "lucide-react";
 import callieLogo from "../../withoutbg.png";
 import Strands from "@/components/Strands";
@@ -37,6 +39,8 @@ type TranscriptMessage = {
 };
 
 const calendarPreviewDate = new Date();
+const productionHostname = "callie-calls.vercel.app";
+const creditNoticeDismissalKey = "callie-credit-notice-dismissed";
 
 function Glyph({ children }: { children: ReactNode }) {
   return <span className="glyph" aria-hidden="true">{children}</span>;
@@ -67,6 +71,7 @@ function VoiceExperienceContent({ user }: { user?: CurrentUser | null }) {
   const [voiceLevel, setVoiceLevel] = useState(0.16);
   const [messages, setMessages] = useState<TranscriptMessage[]>([]);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const [isCreditNoticeOpen, setIsCreditNoticeOpen] = useState(false);
   const conversation = useConversation({
     onError: (message) => {
       setVoiceError(message);
@@ -131,6 +136,33 @@ function VoiceExperienceContent({ user }: { user?: CurrentUser | null }) {
     }, scope);
     return () => context.revert();
   }, []);
+
+  useEffect(() => {
+    let shouldOpenCreditNotice = false;
+    try {
+      shouldOpenCreditNotice = (
+        window.location.hostname === productionHostname
+        && window.sessionStorage.getItem(creditNoticeDismissalKey) !== "true"
+      );
+    } catch {
+      shouldOpenCreditNotice = window.location.hostname === productionHostname;
+    }
+
+    if (!shouldOpenCreditNotice) return;
+    const timer = window.setTimeout(() => setIsCreditNoticeOpen(true), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!isCreditNoticeOpen) return;
+
+    function closeCreditNoticeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") dismissCreditNotice();
+    }
+
+    window.addEventListener("keydown", closeCreditNoticeOnEscape);
+    return () => window.removeEventListener("keydown", closeCreditNoticeOnEscape);
+  }, [isCreditNoticeOpen]);
 
   useEffect(() => {
     if (!isConnected) {
@@ -227,6 +259,15 @@ function VoiceExperienceContent({ user }: { user?: CurrentUser | null }) {
     }
   }
 
+  function dismissCreditNotice() {
+    setIsCreditNoticeOpen(false);
+    try {
+      window.sessionStorage.setItem(creditNoticeDismissalKey, "true");
+    } catch {
+      // The dialog remains dismissible even when browser storage is unavailable.
+    }
+  }
+
   const displayName = user?.name?.split(" ")[0] || user?.email?.split("@")[0] || "You";
   const strandsIntensity = isConnected ? Math.min(1.12, 0.28 + voiceLevel) : 0.24;
 
@@ -235,6 +276,36 @@ function VoiceExperienceContent({ user }: { user?: CurrentUser | null }) {
       <GradientWave />
       <div className="page-glow page-glow-one" />
       <div className="page-glow page-glow-two" />
+
+      {isCreditNoticeOpen && (
+        <div className="credit-notice-backdrop" role="presentation">
+          <section
+            className="credit-notice-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="credit-notice-title"
+            aria-describedby="credit-notice-description"
+          >
+            <button
+              className="credit-notice-close"
+              type="button"
+              aria-label="Dismiss testing notice"
+              onClick={dismissCreditNotice}
+            >
+              <X size={17} />
+            </button>
+            <span className="credit-notice-icon" aria-hidden="true"><Clock3 size={21} /></span>
+            <p className="credit-notice-kicker">Quick testing note</p>
+            <h2 id="credit-notice-title">Help us keep Callie available.</h2>
+            <p id="credit-notice-description">
+              Voice testing uses a limited remaining LLM-credit balance. Please keep this session to about four or five minutes.
+            </p>
+            <button className="credit-notice-action" type="button" autoFocus onClick={dismissCreditNotice}>
+              Got it, let&apos;s begin
+            </button>
+          </section>
+        </div>
+      )}
 
       <header className="topbar reveal" aria-label="Primary navigation">
         <a className="brand" href="#top" aria-label="Callie home">

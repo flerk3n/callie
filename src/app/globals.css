@@ -82,6 +82,16 @@ a { color: inherit; }
   min-height: 100vh;
   background: var(--canvas);
 }
+.credit-notice-backdrop { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(28, 31, 57, 0.34); backdrop-filter: blur(9px); animation: creditNoticeBackdropIn 220ms ease-out both; }
+.credit-notice-dialog { position: relative; width: min(100%, 420px); padding: 34px; border: 1px solid rgba(198, 207, 247, 0.96); border-radius: 23px; background: linear-gradient(145deg, rgba(255, 255, 255, 0.99), rgba(244, 247, 255, 0.97)); box-shadow: 0 32px 90px rgba(19, 29, 79, 0.27), inset 0 1px rgba(255, 255, 255, 0.95); animation: creditNoticeIn 280ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.credit-notice-close { position: absolute; top: 14px; right: 14px; display: grid; width: 33px; height: 33px; place-items: center; border: 1px solid var(--hairline); border-radius: 10px; background: rgba(255, 255, 255, 0.78); color: var(--ink-muted); transition: color 160ms ease, border-color 160ms ease, background 160ms ease; }
+.credit-notice-close:hover { border-color: #c8d3ff; background: #f4f6ff; color: var(--blue); }
+.credit-notice-icon { display: grid; width: 46px; height: 46px; place-items: center; border-radius: 14px; background: linear-gradient(135deg, var(--blue), var(--violet)); box-shadow: 0 12px 25px rgba(47, 67, 220, 0.23); color: white; }
+.credit-notice-kicker { margin: 24px 0 0; color: var(--blue); font-size: 11px; font-weight: 800; letter-spacing: 0.11em; text-transform: uppercase; }
+.credit-notice-dialog h2 { max-width: 315px; margin: 9px 0 0; color: var(--ink); font-family: var(--font-sora), sans-serif; font-size: 29px; letter-spacing: -0.055em; line-height: 1.1; }
+.credit-notice-dialog p:not(.credit-notice-kicker) { margin: 14px 0 0; color: var(--ink-muted); font-size: 14px; line-height: 1.65; }
+.credit-notice-action { width: 100%; min-height: 46px; margin-top: 25px; border: 1px solid var(--blue); border-radius: 12px; background: var(--blue); box-shadow: 0 12px 24px rgba(0, 61, 255, 0.2); color: white; font-family: var(--font-sora), sans-serif; font-size: 13px; font-weight: 700; transition: transform 160ms ease, background 160ms ease, box-shadow 160ms ease; }
+.credit-notice-action:hover { transform: translateY(-1px); background: var(--blue-soft); box-shadow: 0 16px 29px rgba(0, 61, 255, 0.28); }
 .gradient-wave {
   position: absolute;
   z-index: -1;
@@ -255,6 +265,8 @@ footer a:hover { color: var(--blue); }
 .legal-card li + li { margin-top: 5px; }
 
 @keyframes quoteWave { 50% { transform: scaleY(0.6); opacity: 0.55; } }
+@keyframes creditNoticeBackdropIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes creditNoticeIn { from { opacity: 0; transform: translateY(12px) scale(0.975); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes gradientWaveDrift {
   from { transform: translate3d(-1.5%, -0.5%, 0) scale(1); }
   to { transform: translate3d(1.5%, 0.8%, 0) scale(1.025); }
