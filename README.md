@@ -4,6 +4,8 @@ Callie is a voice-first smart scheduling agent. It holds a natural, multi-turn c
 
 **Live app:** [callie-calls.vercel.app](https://callie-calls.vercel.app) · **Repository:** [github.com/flerk3n/callie](https://github.com/flerk3n/callie)
 
+> **Testing note:** Please keep a deployed voice test to 4–5 minutes. The remaining LLM-credit budget is limited after rigorous testing.
+
 **Agent model:** GLM 5.2, selected for fast, accurate tool-use output with efficient token consumption.
 
 ## Assignment coverage
